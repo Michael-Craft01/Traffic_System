@@ -1,65 +1,80 @@
-import Image from "next/image";
+"use client";
+import {useState, useEffect} from 'react'
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+export default function Home(){
+  const [data, setData] = useState({
+    vehicle_count: 0,
+    congestion_status: "loading..."
+  })
+
+  // poll the api every 2 sec
+  useEffect(()=>{
+    const interval = setInterval(async()=>{
+      try{
+        const res = await fetch('/api/traffic', {cache: 'no-store'})
+        const json = await res.json();
+        if(json.vehicle_count !== undefined){
+          setData(json);
+        }
+
+      }catch(err){
+        console.error("Failed to fetch data, error: ", err);
+      }
+    }, 2000) //2000,ms = 2sec
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // dynamic color logic
+  const getStatusColor = (status: string)=>{
+    if (status=== 'CONGESTED') return 'bg-red-600 border-red-600';
+    if (status === 'MODERATE') return 'bg-orange-600 border-orange-600';
+    // if (status === 'CLEAR') return 'bg-green-600 border-green-600';
+    return 'bg-green-600 border-green-600';
+  };
+  return(
+    <main className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+      
+      {/* HEADER */}
+      <div className="text-center mb-12">
+        <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-2">
+          🚦 Traffic Command Center
+        </h1>
+        <p className="text-slate-400">Harare CBD • Real-Time AI Monitoring</p>
+      </div>
+
+      {/* DASHBOARD CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+        
+        {/* CARD 1: VEHICLE COUNT */}
+        <div className="bg-slate-800 rounded-3xl p-8 border border-slate-700 shadow-2xl flex flex-col items-center justify-center">
+          <h2 className="text-slate-400 font-medium uppercase tracking-wider mb-4">
+            Detected Vehicles
+          </h2>
+          <div className="text-8xl font-black text-blue-400">
+            {data.vehicle_count}
+          </div>
+          <p className="text-sm text-slate-500 mt-4">Updated Live</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* CARD 2: STATUS ALERT */}
+        <div className={`rounded-3xl p-8 border-4 shadow-2xl flex flex-col items-center justify-center transition-colors duration-500 ${getStatusColor(data.congestion_status)}`}>
+          <h2 className="text-white/80 font-medium uppercase tracking-wider mb-4">
+            Current Status
+          </h2>
+          <div className="text-5xl md:text-6xl font-black text-white text-center leading-tight">
+            {data.congestion_status}
+          </div>
+          <p className="text-sm text-white/60 mt-4">AI Recommendation</p>
         </div>
-      </main>
-    </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="mt-12 text-slate-500 text-sm">
+        System Node: CAM_01 • Latency: &lt;100ms
+      </div>
+
+    </main>
   );
 }
