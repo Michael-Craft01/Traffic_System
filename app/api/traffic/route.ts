@@ -1,29 +1,26 @@
 import { NextResponse } from 'next/server';
-import { pool } from '@/lib/db';
+import fs from 'fs';
+import path from 'path';
 
-export const dynamic = 'force-dynamic'; // Forces Next.js to not cache this
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    console.log("⚡ API Request received...");
-    
-    // Test the connection
-    const [rows]: any = await pool.query(
-      'SELECT * FROM traffic_logs ORDER BY id DESC LIMIT 1'
-    );
-    
-    console.log("✅ API Database Read Success:", rows[0]);
+    const filePath = path.join(process.cwd(), 'public', 'traffic_data.json');
 
-    // Handle empty database case
-    const data = rows[0] || { 
-      vehicle_count: 0, 
-      congestion_status: "Waiting for data..." 
-    };
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json({
+        vehicle_count: 0,
+        congestion_status: "Waiting for AI..."
+      });
+    }
+
+    const fileContents = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(fileContents);
 
     return NextResponse.json(data);
 
   } catch (error: any) {
-    console.error("❌ API ERROR:", error.message); // This will show in your terminal
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
