@@ -7,7 +7,7 @@ import time
 # --- CONFIGURATION (EDIT THIS) ---
 # 1. Your Phone's IP (Find this in the IP Webcam app)
 # Example: "192.168.2.178"
-PHONE_IP = "192.168.2.178" 
+PHONE_IP = "192.168.2.185" 
 
 # 2. Port (Default is 8080)
 PORT = "8080"
@@ -16,18 +16,17 @@ PORT = "8080"
 DATA_FILE = os.path.join(os.path.dirname(__file__), '../public/traffic_data.json')
 FRAME_FILE = os.path.join(os.path.dirname(__file__), '../public/processed_frame.jpg')
 
-# Use Environment variable if set, otherwise use the IP above
-# To use computer webcam, set PHONE_IP to "0"
-env_source = os.getenv("TRAFFIC_VIDEO_SOURCE")
-if env_source:
-    VIDEO_SOURCE = env_source
+# PHONE_IP always takes priority.
+# Only falls back to env var if PHONE_IP is blank.
+if PHONE_IP and PHONE_IP != "0":
+    VIDEO_SOURCE = f"http://{PHONE_IP}:{PORT}/video"
 elif PHONE_IP == "0":
     VIDEO_SOURCE = 0
 else:
-    VIDEO_SOURCE = f"http://{PHONE_IP}:{PORT}/video"
+    env_source = os.getenv("TRAFFIC_VIDEO_SOURCE", "0")
+    VIDEO_SOURCE = int(env_source) if env_source.isdigit() else env_source
 
-if isinstance(VIDEO_SOURCE, str) and VIDEO_SOURCE.isdigit():
-    VIDEO_SOURCE = int(VIDEO_SOURCE)
+print(f"📡 Video Source: {VIDEO_SOURCE}")
 
 # Ensure directory exists
 os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
