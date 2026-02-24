@@ -7,7 +7,7 @@ import time
 # --- CONFIGURATION (EDIT THIS) ---
 # 1. Your Phone's IP (Find this in the IP Webcam app)
 # Example: "192.168.2.178"
-PHONE_IP = "192.168.2.185" 
+PHONE_IP = "172.20.10.4" 
 
 # 2. Port (Default is 8080)
 PORT = "8080"
