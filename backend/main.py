@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import ingestion, mobile
+from api import ingestion, mobile, routing
 
 # 1. Initialize the FastAPI Application
 app = FastAPI(
@@ -24,6 +24,9 @@ app.include_router(ingestion.router, prefix="/api/v1/ingest", tags=["Data Ingest
 
 # e.g., GET from http://localhost:8000/api/v1/mobile/state
 app.include_router(mobile.router, prefix="/api/v1/mobile", tags=["Mobile Client Interfaces"])
+
+# e.g., POST to http://localhost:8000/api/v1/routing/check-commute
+app.include_router(routing.router, prefix="/api/v1/routing", tags=["Recommendation Engine"])
 
 @app.get("/")
 async def root():
