@@ -1,3 +1,6 @@
 ultralytics
 mysql-connector-python
 opencv-python
+torch
+pandas
+numpy
