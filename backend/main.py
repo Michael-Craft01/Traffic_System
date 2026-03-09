@@ -1,12 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import ingestion, mobile, routing
+from core.config import settings
+from core.logger import get_logger
+
+logger = get_logger("main")
 
 # 1. Initialize the FastAPI Application
 app = FastAPI(
-    title="Traffic Orchestration 'Director' API",
+    title=settings.API_TITLE,
     description="The central nervous system connecting CV Cameras, ML Brain, and Mobile Apps.",
-    version="1.0.0"
+    version=settings.API_VERSION
 )
 
 # 2. Configure CORS (Allows web dashboards to talk to this API)
@@ -38,5 +42,5 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     # Start the server locally on port 8000
-    print("🚦 Starting the Traffic Director Backend...")
+    logger.info("🚦 Starting the Traffic Director Backend...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

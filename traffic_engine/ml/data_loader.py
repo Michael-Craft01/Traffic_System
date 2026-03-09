@@ -34,28 +34,63 @@ class TrafficDataset(Dataset):
 
     def _generate_synthetic_data(self, num_days=30):
         """
-        Generates synthetic traffic data simulating a typical highway with rush hours.
-        Data frequency is every 5 minutes.
+        Generates highly realistic synthetic traffic data simulating a typical highway.
+        Includes Weekend vs Weekday patterns, Morning/Evening rushes, and random accidents.
         """
-        print(f"Generating synthetic traffic data for {num_days} days...")
-        # 288 5-minute intervals in a day
-        intervals_per_day = 288 
+        print(f"Generating HIGH-FIDELITY synthetic traffic data for {num_days} days...")
+        intervals_per_day = 288 # 288 5-minute blocks in 24 hours
         total_intervals = intervals_per_day * num_days
         
-        # Base daily pattern (two humps for morning/evening rush)
-        time = np.linspace(0, 2*np.pi, intervals_per_day)
-        # Using sine waves to simulate traffic volume rising and falling
-        daily_pattern = (np.sin(time - np.pi/2) + 1) * 200 + \
-                        (np.sin(2*time - np.pi/2) + 1) * 200
-                        
-        # Repeat pattern for num_days and add random noise
-        volumes = np.tile(daily_pattern, num_days)
-        noise = np.random.normal(0, 50, total_intervals)
-        volumes = np.clip(volumes + noise, 10, 1000) # Keep between 10 and 1000 cars
+        volumes = np.zeros(total_intervals)
+        
+        for day in range(num_days):
+            day_of_week = day % 7 # 0-4 is Mon-Fri, 5-6 is Sat-Sun
+            start_idx = day * intervals_per_day
+            end_idx = start_idx + intervals_per_day
+            
+            # Base overnight traffic (midnight to 5am) ~ 20-50 cars
+            base = np.random.normal(30, 10, intervals_per_day)
+            
+            if day_of_week < 5:  # WEEKDAY PATTERN
+                # Morning Rush (7:00 AM - 9:30 AM) -> index 84 to 114
+                rush_m = np.zeros(intervals_per_day)
+                rush_m[80:120] = np.sin(np.linspace(0, np.pi, 40)) * 600
+                
+                # Evening Rush (4:00 PM - 6:30 PM) -> index 192 to 222
+                # Fridays (day_of_week == 4) have earlier, heavier evening rushes
+                rush_e = np.zeros(intervals_per_day)
+                if day_of_week == 4:
+                    rush_e[180:230] = np.sin(np.linspace(0, np.pi, 50)) * 750
+                else:
+                    rush_e[190:230] = np.sin(np.linspace(0, np.pi, 40)) * 650
+                    
+                # Midday lull
+                midday = np.zeros(intervals_per_day)
+                midday[120:190] = np.random.normal(250, 40, 70)
+                
+                daily_vol = base + rush_m + rush_e + midday
+                
+            else: # WEEKEND PATTERN (Sat, Sun)
+                # No sharp rush hours, just a smooth bell curve peaking midday
+                weekend_curve = np.zeros(intervals_per_day)
+                weekend_curve[100:240] = np.sin(np.linspace(0, np.pi, 140)) * 400
+                daily_vol = base + weekend_curve
+                
+            # Add occasional random "Accident" spikes
+            if np.random.random() > 0.8: # 20% chance of anomaly per day
+                anomaly_start = np.random.randint(100, 200)
+                anomaly_duration = np.random.randint(6, 18) # 30 to 90 mins
+                daily_vol[anomaly_start:anomaly_start+anomaly_duration] = np.random.normal(850, 50, anomaly_duration)
+                
+            volumes[start_idx:end_idx] = daily_vol
+                
+        # Ensure bounds and integers
+        volumes = np.clip(volumes, 10, 1200)
         
         # Speed inversely correlates with volume (more cars = slower speeds)
-        speeds = 65 - (volumes / 1000) * 45 
-        speed_noise = np.random.normal(0, 5, total_intervals)
+        # Above 600 volume, speed drops sharply
+        speeds = 65 - (np.maximum(volumes - 300, 0) / 900) * 55 
+        speed_noise = np.random.normal(0, 3, total_intervals)
         speeds = np.clip(speeds + speed_noise, 5, 75)
         
         # Create timestamps

@@ -1,14 +1,14 @@
 from core.ml_integration import ml_brain, get_recent_history
+from core.config import settings
+from core.logger import get_logger
+
+logger = get_logger("recommendation")
 
 class RecommendationEngine:
     """
     The core logic for Objective 3: Active Traffic Optimization.
     Calculates if a user should change their departure time to prevent a jam.
     """
-    
-    # The maximum number of cars a road can handle before we consider it "congested"
-    # This would normally be dynamic per road. Let's assume a hard cap for the demo.
-    CONGESTION_THRESHOLD_VOLUME = 600
 
     @classmethod
     def calculate_optimal_departure(cls, route_id: str, planned_departure_index: int):
@@ -42,7 +42,7 @@ class RecommendationEngine:
         planned_volume = predictions[planned_departure_index]
         
         # 3. Decision Logic
-        if planned_volume < cls.CONGESTION_THRESHOLD_VOLUME:
+        if planned_volume < settings.CONGESTION_THRESHOLD_VOLUME:
             # Route is clear at their planned time
             return {
                 "status": "CLEAR",
@@ -56,11 +56,12 @@ class RecommendationEngine:
         # Example: if they plan to leave at index 3 (T+15), we check index 2 (T+10), index 1 (T+5), index 0 (Now)
         
         for i in range(planned_departure_index - 1, -1, -1):
-            if predictions[i] < cls.CONGESTION_THRESHOLD_VOLUME:
+            if predictions[i] < settings.CONGESTION_THRESHOLD_VOLUME:
                 # We found a clear time slot earlier!
                 shift_intervals = planned_departure_index - i
                 shift_mins = shift_intervals * 5
                 
+                logger.info(f"Issuing severity ALERT for route {route_id}. Shifting departure earlier by {shift_mins}m")
                 return {
                     "status": "ALERT",
                     "message": f"SEVERE CONGESTION PREDICTED! Leave {shift_mins} minutes early to avoid a massive jam.",

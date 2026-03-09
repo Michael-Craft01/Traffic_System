@@ -1,5 +1,9 @@
 import redis
 import json
+from core.config import settings
+from core.logger import get_logger
+
+logger = get_logger("redis_manager")
 
 class RedisManager:
     """
@@ -7,15 +11,20 @@ class RedisManager:
     Instead of hitting a SQL database to check if a road is congested,
     millions of mobile users can hit Redis instantly.
     """
-    def __init__(self, host="localhost", port=6379, db=0):
+    def __init__(self):
         # We wrap in try block so the app doesn't crash if Redis isn't running locally yet
         try:
-            self.redis_client = redis.Redis(host=host, port=port, db=db, decode_responses=True)
+            self.redis_client = redis.Redis(
+                host=settings.REDIS_HOST, 
+                port=settings.REDIS_PORT, 
+                db=0, 
+                decode_responses=True
+            )
             # Ping to test connection
             self.redis_client.ping()
-            print("✅ Successfully connected to Redis State Manager")
+            logger.info("✅ Successfully connected to Redis State Manager")
         except redis.exceptions.ConnectionError:
-            print("⚠️ WARNING: Could not connect to Redis. Ensure it is running on localhost:6379")
+            logger.warning(f"⚠️ WARNING: Could not connect to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}")
             self.redis_client = None
 
     def set_camera_state(self, camera_id: str, data: dict):
