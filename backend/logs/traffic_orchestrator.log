@@ -52,3 +52,55 @@
 2026-03-09 10:40:20,205 - main - INFO - Starting the Traffic Director Backend...
 2026-03-09 10:40:26,748 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
 2026-03-09 10:40:31,630 - ml_integration - INFO - Successfully loaded ML Brain into Backend Core
+2026-03-09 10:41:31,889 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:34,032 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:36,168 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:38,285 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:40,416 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:42,551 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:44,698 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:46,837 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:48,955 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:51,091 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:53,236 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:55,375 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:57,494 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:41:59,633 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:01,753 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:04,881 - routing_api - INFO - Processing route request for cam_main_01 in background threadpool...
+2026-03-09 10:42:08,649 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:10,797 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:12,935 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:15,051 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:17,200 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:19,335 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:21,469 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:23,605 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:25,738 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:27,872 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:30,023 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:32,170 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:34,301 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:36,443 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:38,587 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:41,713 - routing_api - INFO - Processing route request for cam_main_01 in background threadpool...
+2026-03-09 10:42:46,032 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:48,166 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:50,316 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:52,453 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:54,607 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:56,739 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:42:58,869 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:01,018 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:03,163 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:05,305 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:07,443 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:09,577 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:11,710 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:13,839 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:15,977 - ingestion_api - ERROR - Failed to save state for cam_main_01 to Redis.
+2026-03-09 10:43:19,127 - routing_api - INFO - Processing route request for cam_main_01 in background threadpool...
+2026-03-09 10:43:27,329 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 10:43:41,010 - ml_integration - INFO - Successfully loaded ML Brain into Backend Core
+2026-03-09 10:45:03,876 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 10:45:16,065 - ml_integration - INFO - Successfully loaded ML Brain into Backend Core

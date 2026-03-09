@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-db_path = "c:/Users/ragum/Traffic_System/backend/test.db"
+db_path = "c:/Users/ragum/Traffic_System/traffic_brain.db"
 
 if not os.path.exists(db_path):
     print(f"Error: Database file not found at {db_path}")
