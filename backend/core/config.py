@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Machine Learning Thresholds
     CONGESTION_THRESHOLD_VOLUME: int = 600
     
+    # Security (JWT)
+    SECRET_KEY: str = "your-super-secret-key-change-this-in-env"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

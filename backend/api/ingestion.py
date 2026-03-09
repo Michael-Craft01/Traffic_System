@@ -1,9 +1,6 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import Optional
-from core.redis import redis_manager
-from core.logger import get_logger
 from core.database import SessionLocal, TrafficHistory
+from core.security import get_current_user
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 import time
 
 logger = get_logger("ingestion_api")
@@ -45,11 +42,16 @@ def save_camera_data_bg(camera_id: str, data: dict):
         db.close()
 
 @router.post("/camera")
-async def ingest_camera_data(payload: CameraPayload, background_tasks: BackgroundTasks):
+async def ingest_camera_data(
+    payload: CameraPayload, 
+    background_tasks: BackgroundTasks,
+    current_user: str = Depends(get_current_user) # Require valid JWT
+):
     """
     Endpoint for detector.py to POST live traffic data.
-    This accepts the payload instantly and queues the storage work to the background.
+    Requires a valid JWT token.
     """
+    logger.info(f"Ingest received from authorized camera: {current_user}")
     data_to_store = payload.dict()
     data_to_store["server_time"] = time.time()
     

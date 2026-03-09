@@ -1,26 +1,29 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), 'public', 'traffic_data.json');
+    const res = await fetch(`${BACKEND_URL}/api/v1/mobile/state`, { cache: 'no-store' });
+    const json = await res.json();
 
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({
-        vehicle_count: 0,
-        congestion_status: "Waiting for AI..."
-      });
-    }
+    // Extract default camera 'cam_main_01' data or return fallback
+    const liveData = json.data?.cam_main_01 || {};
 
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    const data = JSON.parse(fileContents);
-
-    return NextResponse.json(data);
+    return NextResponse.json({
+      vehicle_count: liveData.total_flow || 0,
+      congestion_status: liveData.status || "UNKNOWN",
+      predictions: json.predictions || []
+    });
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Fetch error:", error.message);
+    return NextResponse.json({
+      vehicle_count: 0,
+      congestion_status: "OFFLINE",
+      error: error.message
+    }, { status: 500 });
   }
 }
