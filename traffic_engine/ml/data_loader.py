@@ -21,16 +21,26 @@ class TrafficDataset(Dataset):
         if generate_synthetic:
             self.data = self._generate_synthetic_data(num_days=30)
         else:
-            # We will implement real data loading from DB/CSV later
+            # Load from the CSV produced by data_exporter.py
             self.data = pd.read_csv(data_file)
             
-        # Normalize data (simple min-max scaling for demonstration)
-        # In production, we'd save the scaler to use during inference
-        self.max_vol = self.data['volume'].max()
-        self.max_spd = self.data['speed'].max()
+        # Normalize data
+        self.max_vol = self.data['volume'].max() if not self.data.empty else 1000
+        # Default speed max to 75 as per synthetic generator
+        self.max_spd = 75.0 
         
         self.data['volume_norm'] = self.data['volume'] / self.max_vol
         self.data['speed_norm'] = self.data['speed'] / self.max_spd
+        
+        # New Features for Stage 2
+        # If the features don't exist (legacy), we default to 0
+        if 'hour' not in self.data.columns:
+            self.data['hour'] = 0
+        if 'day_of_week' not in self.data.columns:
+            self.data['day_of_week'] = 0
+            
+        self.data['hour_norm'] = self.data['hour'] / 23.0
+        self.data['day_norm'] = self.data['day_of_week'] / 6.0
 
     def _generate_synthetic_data(self, num_days=30):
         """
@@ -109,10 +119,10 @@ class TrafficDataset(Dataset):
 
     def __getitem__(self, idx):
         # 1. Extract the input sequence (Historical X)
-        # Columns: [volume_norm, speed_norm]
+        # Stage 2: We use 4 features now (volume, speed, hour, day)
         x_start = idx
         x_end = idx + self.seq_length
-        x = self.data.iloc[x_start:x_end][['volume_norm', 'speed_norm']].values
+        x = self.data.iloc[x_start:x_end][['volume_norm', 'speed_norm', 'hour_norm', 'day_norm']].values
         
         # 2. Extract the target sequence (Future Y)
         # Predicting future volume
@@ -126,12 +136,14 @@ class TrafficDataset(Dataset):
         
         return x_tensor, y_tensor
 
-def get_dataloaders(seq_length=12, pred_length=6, batch_size=32):
+def get_dataloaders(data_file=None, seq_length=12, pred_length=6, batch_size=32):
     """
-    Creates Training and Validation DataLoaders using synthetic data for now.
+    Creates Training and Validation DataLoaders. 
+    If data_file is provided, it loads real data; otherwise, it generates synthetic.
     """
     # Create full dataset
-    full_dataset = TrafficDataset(seq_length=seq_length, pred_length=pred_length, generate_synthetic=True)
+    gen_synthetic = data_file is None
+    full_dataset = TrafficDataset(data_file=data_file, seq_length=seq_length, pred_length=pred_length, generate_synthetic=gen_synthetic)
     
     # Split into 80% Train, 20% Val
     train_size = int(0.8 * len(full_dataset))

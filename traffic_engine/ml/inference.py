@@ -23,7 +23,7 @@ class BrainInference:
             self.max_vol = 1000.0
             
         # Initialize and load model
-        self.model = TrafficPredictorLSTM(input_size=2, hidden_size=64, num_layers=2, output_size=pred_length)
+        self.model = TrafficPredictorLSTM(input_size=4, hidden_size=64, num_layers=2, output_size=pred_length)
         
         if os.path.exists(model_path):
             self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
@@ -40,7 +40,7 @@ class BrainInference:
         
         Args:
             recent_data (list of lists): The last `seq_length` periods of data.
-                Format: [[volume_1, speed_1], [volume_2, speed_2], ... ]
+                Format: [[volume, speed, hour, day], ... ]
                 
         Returns:
             list: Predicted volumes for the next `pred_length` (e.g. 6) time slots.
@@ -48,14 +48,17 @@ class BrainInference:
         if len(recent_data) != self.seq_length:
             raise ValueError(f"Expected sequence of exactly {self.seq_length} time slots.")
             
-        # 1. Preprocess / Normalize the data exactly as done in data_loader
-        # We assume speed max is around 75mph based on synthetic data generator
+        # 1. Preprocess / Normalize the data
         normalized_input = []
-        for vol, spd in recent_data:
-            normalized_input.append([vol / self.max_vol, spd / 75.0])
+        for vol, spd, hour, day in recent_data:
+            normalized_input.append([
+                vol / self.max_vol, 
+                spd / 75.0,
+                hour / 23.0,
+                day / 6.0
+            ])
             
         # 2. Convert to Tensor and add Batch Dimension
-        # Shape goes from (12, 2) -> (1, 12, 2)
         input_tensor = torch.tensor(normalized_input, dtype=torch.float32).unsqueeze(0).to(self.device)
         
         # 3. Model Inference

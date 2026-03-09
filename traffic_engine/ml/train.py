@@ -15,12 +15,19 @@ def train_model(epochs=10, batch_size=32, learning_rate=0.001, seq_length=12, pr
     print(f"Using device: {device}")
     
     # 1. Load Data
-    print("Loading datasets...")
-    train_loader, val_loader, max_vol = get_dataloaders(seq_length=seq_length, pred_length=pred_length, batch_size=batch_size)
+    print("Checking for real-world historical data...")
+    data_file = "historical_traffic.csv"
+    if os.path.exists(data_file):
+        print(f"  -> Found {data_file}! Training on real SQL history.")
+    else:
+        print("  -> No historical data found. Falling back to synthetic generator.")
+        data_file = None
+
+    train_loader, val_loader, max_vol = get_dataloaders(data_file=data_file, seq_length=seq_length, pred_length=pred_length, batch_size=batch_size)
     
     # 2. Initialize Model
-    # Input size is 2 (volume, speed)
-    model = TrafficPredictorLSTM(input_size=2, hidden_size=64, num_layers=2, output_size=pred_length)
+    # Input size is 4 (volume, speed, hour, day)
+    model = TrafficPredictorLSTM(input_size=4, hidden_size=64, num_layers=2, output_size=pred_length)
     model.to(device)
     
     # 3. Define Loss Function and Optimizer
@@ -73,15 +80,18 @@ def train_model(epochs=10, batch_size=32, learning_rate=0.001, seq_length=12, pr
         # Save the best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_path = "traffic_model_best.pth"
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            save_path = os.path.join(current_dir, "traffic_model_best.pth")
             torch.save(model.state_dict(), save_path)
             print(f"  -> Model saved to {save_path}")
 
     print("--- Training Complete ---")
-    print(f"Note: Max volume was {max_vol} (needed to reverse normalization during inference)")
+    print(f"Note: Max volume was {max_vol}")
     
     # Save the max volume so inference script knows how to scale responses back
-    with open("model_metadata.txt", "w") as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    metadata_path = os.path.join(current_dir, "model_metadata.txt")
+    with open(metadata_path, "w") as f:
         f.write(str(max_vol))
 
 if __name__ == "__main__":

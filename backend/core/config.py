@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     
     # Persistent Database (MySQL mapping for future)
-    DATABASE_URL: str = "sqlite:///./test.db"  # Default to local sqlite for immediate dev
+    _base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DATABASE_URL: str = f"sqlite:///{os.path.join(_base_dir, 'traffic_brain.db')}"
     
     # Machine Learning Thresholds
     CONGESTION_THRESHOLD_VOLUME: int = 600

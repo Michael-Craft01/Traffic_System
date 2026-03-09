@@ -54,7 +54,13 @@ def get_recent_history(route_id: str):
         for log in history:
             # Reconstruct speed (simulated for now since detector only sends count)
             speed = max(10, 65 - (log.vehicle_count / 20))
-            base_window.append([log.vehicle_count, speed])
+            # Stage 2: append 4 features (volume, speed, hour, day)
+            base_window.append([
+                log.vehicle_count, 
+                speed, 
+                log.timestamp.hour, 
+                log.timestamp.weekday()
+            ])
             
         # 2. Fill gaps if we don't have enough history yet (cold start)
         while len(base_window) < 11:
@@ -67,9 +73,10 @@ def get_recent_history(route_id: str):
     states = redis_manager.get_all_camera_states()
     live_state = states.get(route_id, {})
     live_volume = live_state.get('total_flow', 350)
-    live_speed = max(10, 65 - (live_volume / 20))
+    import datetime
+    now = datetime.datetime.now()
     
     # Append the real, live data from the IP Webcam!
-    base_window.append([live_volume, live_speed])
+    base_window.append([live_volume, live_speed, now.hour, now.weekday()])
     
     return base_window
