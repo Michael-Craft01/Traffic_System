@@ -6,12 +6,14 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function GET(
     request: Request,
-    { params }: { params: { route_id: string } }
+    { params }: { params: Promise<{ route_id: string }> }
 ) {
-    const routeID = params.route_id;
+    const { route_id } = await params;
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+
     try {
-        const res = await fetch(`${BACKEND_URL}/api/v1/routing/forecast/${routeID}`, { cache: 'no-store' });
-        const data = await res.json();
+        const response = await fetch(`${backendUrl}/api/v1/routing/forecast/${route_id}`, { cache: 'no-store' });
+        const data = await response.json();
         return NextResponse.json(data);
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

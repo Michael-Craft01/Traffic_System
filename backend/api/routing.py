@@ -28,7 +28,10 @@ async def check_planned_commute(
     # Convert minutes into our 5-minute index blocks
     departure_index = request.departure_delay_mins // 5
     
-    # Decouple the heavy ML PyTorch processing
+    # Anonymize user telemetry before processing (Stage 4 requirement)
+    anon_user = anonymize_id(request.user_id)
+    logger.info(f"Processing route request for anonymous user {anon_user} on route {request.route_id}...")
+    
     recommendation = await run_in_threadpool(
         RecommendationEngine.calculate_optimal_departure,
         route_id=request.route_id, 
@@ -50,6 +53,9 @@ async def get_raw_forecast(route_id: str):
         logger.warning(f"Raw forecast requested for {route_id} but ML model is offline.")
         return {"error": "ML model not loaded"}
         
+    from core.ml_integration import get_recent_history, ml_brain
+    from core.security import anonymize_id
+    
     recent_data = get_recent_history(route_id)
     
     # Run predictions in threadpool to prevent blocking FastAPI

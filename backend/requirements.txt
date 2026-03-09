@@ -3,3 +3,10 @@ uvicorn
 redis
 pydantic
 pydantic-settings
+sqlalchemy
+python-jose[cryptography]
+passlib[bcrypt]
+torch
+pandas
+numpy
+watchfiles
