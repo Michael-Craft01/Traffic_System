@@ -16,12 +16,12 @@ This roadmap transitions the system from a simulated prototype to a production-r
 - **Weather/Event Integration**: Add "Weather" and "Holiday" features to the model to predict abnormal traffic spikes.
 - **Success Metric**: Prediction error rate (RMSE) decreases as the system collects more city-specific data.
 
-## 🟡 Stage 3: The User Gateway (Mobile & Accounts)
-**Goal:** Put the insights in front of real users.
-- **Cross-Platform PWA**: Optimize the Next.js dashboard for mobile-first interactions (PWA).
-- **User Routines**: Enable users to save "Home" and "Office" locations to prioritize specific route forecasts.
-- **Push Notification Service**: Integrate Firebase to trigger "Leave Now" alerts when the Recommendation Engine detects a building jam.
-- **Success Metric**: Users receive a notification 15 minutes BEFORE a jam starts on their saved route.
+## 🟡 Stage 3: New Mobile PWA Frontend
+**Goal:** Replace the legacy dashboard with a dedicated, mobile-first PWA.
+- **PWA Manifest & Service Worker**: Configure `manifest.json` and service workers for "Add to Home Screen" support.
+- **Clean Mobile UI**: Design a modern, streamlined interface focused on map utility and clear status indicators.
+- **Live Data Streams**: Bind the new UI to the existing high-performance Redis/SQL backend.
+- **Success Metric**: The application is "installable" on iOS/Android and provides a native-quality traffic monitoring experience.
 
 ## 🔴 Stage 4: Orchestration & Scale (City-Wide Deployment)
 **Goal:** Ensure 99.9% uptime and handle thousands of concurrent nodes.
