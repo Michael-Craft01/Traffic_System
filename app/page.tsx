@@ -24,7 +24,7 @@ export default function Home() {
   const [showReporter, setShowReporter] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [lastRefreshed, setLastRefreshed] = useState(new Date());
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   // Service Worker & Local Storage Profile
   useEffect(() => {
@@ -37,6 +37,7 @@ export default function Home() {
 
     const savedProfile = localStorage.getItem('traffic_user_profile');
     if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+    setLastRefreshed(new Date());
   }, []);
 
   // Data Fetching Loop
@@ -369,8 +370,8 @@ export default function Home() {
             Check Commute Window
           </button>
 
-          <p className="text-center text-[9px] text-slate-600 mt-4 uppercase tracking-[0.2em]">
-            Last Sync: {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">
+            Last Update: {lastRefreshed ? lastRefreshed.toLocaleTimeString() : '---'}
           </p>
         </div>
       </div>

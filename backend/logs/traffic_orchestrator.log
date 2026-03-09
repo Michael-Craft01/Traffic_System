@@ -128,3 +128,7 @@
 2026-03-09 12:28:08,861 - main - INFO - Starting the Traffic Director Backend...
 2026-03-09 12:28:15,146 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
 2026-03-09 12:28:19,524 - ml_integration - INFO - Successfully loaded ML Brain into Backend Core
+2026-03-09 12:48:28,878 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 12:48:28,889 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 12:48:28,889 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 12:55:49,560 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379

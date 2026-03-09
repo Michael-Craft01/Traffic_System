@@ -1,6 +1,10 @@
 from core.database import SessionLocal, TrafficHistory
 from core.security import get_current_user
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from pydantic import BaseModel
+from typing import Optional
+from core.redis import redis_manager
+from core.logger import get_logger
 import time
 
 logger = get_logger("ingestion_api")
