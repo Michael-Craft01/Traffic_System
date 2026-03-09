@@ -22,9 +22,9 @@ class RedisManager:
             )
             # Ping to test connection
             self.redis_client.ping()
-            logger.info("✅ Successfully connected to Redis State Manager")
+            logger.info("Successfully connected to Redis State Manager")
         except redis.exceptions.ConnectionError:
-            logger.warning(f"⚠️ WARNING: Could not connect to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+            logger.warning(f"WARNING: Could not connect to Redis at {settings.REDIS_HOST}:{settings.REDIS_PORT}")
             self.redis_client = None
 
     def set_camera_state(self, camera_id: str, data: dict):

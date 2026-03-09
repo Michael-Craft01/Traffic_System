@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import ingestion, mobile, routing
 from core.config import settings
 from core.logger import get_logger
+from core.database import init_db
+
+# Initialize database tables
+init_db()
 
 logger = get_logger("main")
 
@@ -42,5 +46,5 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     # Start the server locally on port 8000
-    logger.info("🚦 Starting the Traffic Director Backend...")
+    logger.info("Starting the Traffic Director Backend...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

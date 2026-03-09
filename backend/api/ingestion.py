@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from core.redis import redis_manager
 from core.logger import get_logger
+from core.database import SessionLocal, TrafficHistory
 import time
 
 logger = get_logger("ingestion_api")
@@ -21,11 +22,27 @@ class CameraPayload(BaseModel):
     longitude: Optional[float] = None
 
 def save_camera_data_bg(camera_id: str, data: dict):
-    """Background task to handle the actual storage (e.g., to Redis and eventually SQL)"""
+    """Background task to handle the actual storage (to Redis and eventually SQL)"""
+    # 1. Update Redis (Fast Cache)
     success = redis_manager.set_camera_state(camera_id, data)
     if not success:
         logger.error(f"Failed to save state for {camera_id} to Redis.")
-    # Here we would also push to a MySQL queue for long-term storage in production
+    
+    # 2. Update SQL (Historical Store)
+    db = SessionLocal()
+    try:
+        new_log = TrafficHistory(
+            sensor_id=camera_id,
+            vehicle_count=data["total_flow"],
+            congestion_status=data["status"]
+        )
+        db.add(new_log)
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to save historical data for {camera_id} to SQL: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 @router.post("/camera")
 async def ingest_camera_data(payload: CameraPayload, background_tasks: BackgroundTasks):
