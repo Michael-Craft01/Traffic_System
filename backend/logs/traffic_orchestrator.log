@@ -1,0 +1,2 @@
+2026-03-09 10:14:46,451 - redis_manager - WARNING - WARNING: Could not connect to Redis at localhost:6379
+2026-03-09 10:14:54,250 - ml_integration - INFO - Successfully loaded ML Brain into Backend Core
