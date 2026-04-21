@@ -52,6 +52,15 @@ export interface Incident {
   severity: "low" | "medium" | "high";
 }
 
+export interface PatternResponse {
+  id: number;
+  label: string;
+  origin_name: string;
+  dest_name: string;
+  target_time: string;
+  confidence: float;
+}
+
 // ── Fetch helpers ─────────────────────────────────────────────────
 const TIMEOUT_MS = 6000;
 
@@ -59,7 +68,7 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(`http://localhost:8000/api/v1${url}`, { ...options, signal: controller.signal });
     return res;
   } finally {
     clearTimeout(timer);
@@ -77,21 +86,18 @@ export async function fetchTrafficState(): Promise<TrafficState> {
     error: null,
   };
   try {
-    const res = await apiFetch("/api/traffic", { cache: "no-store" });
+    const res = await apiFetch("/mobile/state", { cache: "no-store" });
     if (!res.ok) {
       return { ...empty, error: `Server returned ${res.status}` };
     }
     const json = await res.json();
-    // If the API itself reported backend offline
-    if (json.backend_online === false) {
-      return { ...empty, error: json.error ?? "Backend offline", backend_online: false };
-    }
+    const data = json.data || {};
     return {
-      vehicle_count:     json.vehicle_count     ?? 0,
-      congestion_status: json.congestion_status ?? "UNKNOWN",
-      cameras:           json.cameras           ?? {},
-      backend_online:    json.backend_online    ?? true,
-      error:             json.error             ?? null,
+      vehicle_count:     json.live_nodes        ?? 0,
+      congestion_status: "UNKNOWN",
+      cameras:           data,
+      backend_online:    true,
+      error:             null,
     };
   } catch (e: any) {
     return { ...empty, error: e.name === "AbortError" ? "Request timed out" : e.message };
@@ -106,15 +112,12 @@ export async function fetchForecast(routeId: string): Promise<ForecastResult> {
     error: null,
   };
   try {
-    const res = await apiFetch(`/api/forecast/${routeId}`, { cache: "no-store" });
+    const res = await apiFetch(`/routing/forecast/${routeId}`, { cache: "no-store" });
     if (!res.ok) return { ...empty, error: `Server returned ${res.status}` };
     const json = await res.json();
-    if (!json.forecast_30_mins || json.error) {
-      return { ...empty, error: json.error ?? "No forecast data", backend_online: false };
-    }
     return {
       route_id:        json.route_id        ?? routeId,
-      forecast_30_mins: json.forecast_30_mins,
+      forecast_30_mins: json.forecast_30_mins || [],
       backend_online:  true,
       error:           null,
     };
@@ -134,30 +137,50 @@ export async function fetchRecommendation(
     error: null,
   };
   try {
-    const res = await apiFetch("/api/recommendation", {
+    const res = await apiFetch("/routing/check-commute", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer demo-token" },
       body: JSON.stringify({
-        user_id: "web_user_01",
+        user_id: "local_user_01",
         route_id: routeId,
         departure_delay_mins: departureMins,
       }),
     });
     if (!res.ok) return { ...empty, error: `Server returned ${res.status}` };
     const json = await res.json();
-    if (json.error) return { ...empty, error: json.error };
     return { ...json, backend_online: true, error: null };
   } catch (e: any) {
     return { ...empty, error: e.name === "AbortError" ? "Request timed out" : e.message };
   }
 }
 
+export async function logJourney(payload: any): Promise<void> {
+  try {
+    await apiFetch("/telemetry/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: "local_user_01", ...payload }),
+    });
+  } catch (e) {
+    console.warn("Telemetry log failed", e);
+  }
+}
+
+export async function fetchSuggestions(): Promise<PatternResponse[]> {
+  try {
+    const res = await apiFetch("/telemetry/suggestions/local_user_01");
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) {
+    return [];
+  }
+}
+
 export async function fetchIncidents(): Promise<Incident[]> {
   try {
-    const res = await apiFetch("/api/incidents", { cache: "no-store" });
+    const res = await fetch("/api/incidents", { cache: "no-store" });
     if (!res.ok) return [];
-    const json = await res.json();
-    return Array.isArray(json) ? json : [];
+    return await res.json();
   } catch (_) {
     return [];
   }

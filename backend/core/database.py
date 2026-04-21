@@ -26,8 +26,35 @@ class TrafficHistory(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sensor_id = Column(String(50), ForeignKey("sensors.id"))
     vehicle_count = Column(Integer, nullable=False)
-    congestion_status = Column(String(20), nullable=False) # Simplified for SQLite compatibility
+    congestion_status = Column(String(20), nullable=False) 
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+class UserJourneyLog(Base):
+    __tablename__ = "user_journey_logs"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_hash = Column(String(64), index=True)
+    origin_lat = Column(Float)
+    origin_lng = Column(Float)
+    dest_lat = Column(Float)
+    dest_lng = Column(Float)
+    origin_name = Column(String(200))
+    dest_name = Column(String(200))
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+class LearnedPattern(Base):
+    __tablename__ = "learned_patterns"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_hash = Column(String(64), index=True)
+    label = Column(String(100)) # e.g. "Morning Commute"
+    origin_lat = Column(Float)
+    origin_lng = Column(Float)
+    dest_lat = Column(Float)
+    dest_lng = Column(Float)
+    origin_name = Column(String(200))
+    dest_name = Column(String(200))
+    target_time = Column(String(5)) # "HH:MM"
+    confidence = Column(Float) # 0.0 to 1.0
+    last_discovered = Column(DateTime, default=datetime.datetime.utcnow)
 
 # Database dependency
 def get_db():

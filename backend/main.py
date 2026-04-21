@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import ingestion, mobile, routing
+from api import ingestion, mobile, routing, telemetry
 from core.config import settings
 from core.logger import get_logger
 from core.database import init_db
@@ -35,6 +35,9 @@ app.include_router(mobile.router, prefix="/api/v1/mobile", tags=["Mobile Client 
 
 # e.g., POST to http://localhost:8000/api/v1/routing/check-commute
 app.include_router(routing.router, prefix="/api/v1/routing", tags=["Recommendation Engine"])
+
+# e.g., POST to http://localhost:8000/api/v1/telemetry/log
+app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["Usage Telemetry"])
 
 @app.get("/")
 async def root():
