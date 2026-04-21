@@ -1,6 +1,11 @@
-from core.database import SessionLocal, TrafficHistory # Assuming some local use maybe?
+from core.database import SessionLocal, TrafficHistory
 from core.security import anonymize_id, get_current_user
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
+from core.logger import get_logger
+from core.ml_integration import ml_brain
+from core.recommendation import RecommendationEngine
 import time
 
 logger = get_logger("routing_api")

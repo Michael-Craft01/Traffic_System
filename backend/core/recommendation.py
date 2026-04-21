@@ -6,44 +6,33 @@ logger = get_logger("recommendation")
 
 class RecommendationEngine:
     """
-    The core logic for Objective 3: Active Traffic Optimization.
+    The core logic for Active Traffic Optimization.
     Calculates if a user should change their departure time to prevent a jam.
     """
 
     @classmethod
     def calculate_optimal_departure(cls, route_id: str, planned_departure_index: int):
-        """
-        Analyzes the predicted traffic to see if the user's planned departure hits a jam.
-        If it does, it suggests an earlier departure.
-        
-        Args:
-            route_id (str): ID of the road segment
-            planned_departure_index (int): How many 5-min intervals from now the user plans to leave (0 to 5)
-            
-        Returns:
-            dict: The recommendation payload for the mobile app
-        """
         if not ml_brain:
             return {"status": "error", "message": "ML Engine offline."}
             
-        # 1. Get recent history and ask the ML Brain for a prediction
         recent_data = get_recent_history(route_id)
         
         try:
-            # Returns a list of 6 predictions (next 30 mins)
             predictions = ml_brain.predict_future_traffic(recent_data)
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-        # 2. Check the user's planned departure time against the prediction
         if planned_departure_index >= len(predictions):
-            return {"status": "unknown", "message": "Departure too far in future to accurately predict."}
+            return {
+                "status": "error", 
+                "message": f"Cannot predict that far ahead. Max is +{ (len(predictions) - 1) * 5 } mins.",
+                "predicted_volume": 0
+            }
 
         planned_volume = predictions[planned_departure_index]
+        threshold = settings.CONGESTION_THRESHOLD_VOLUME
         
-        # 3. Decision Logic
-        if planned_volume < settings.CONGESTION_THRESHOLD_VOLUME:
-            # Route is clear at their planned time
+        if planned_volume < threshold:
             return {
                 "status": "CLEAR",
                 "message": "Your planned departure time looks clear.",
@@ -51,39 +40,35 @@ class RecommendationEngine:
                 "suggested_shift_mins": 0
             }
             
-        # 4. Route IS congested. Calculate an alternative departure time.
-        # Spreading Logic (Stage 4): Prevent "Network Shifting" by distributing
-        # users across multiple potential windows rather than just the first clear one.
-        
+        # 4. Route IS congested. Find closest alternative departure time (earlier OR later).
         clear_windows = []
-        for i in range(planned_departure_index - 1, -1, -1):
-            if predictions[i] < settings.CONGESTION_THRESHOLD_VOLUME:
+        for i, p_vol in enumerate(predictions):
+            if p_vol < threshold:
                 clear_windows.append(i)
 
         if clear_windows:
-            # Stage 4 Optimization: Instead of always picking the closest window,
-            # we pick a random one from the clear list or slightly shift based on user_id
-            # to ensure the city capacity is balanced.
             import random
-            # Deterministic jitter based on user_id (simulated orchestration)
-            shift_to_index = clear_windows[hash(route_id) % len(clear_windows)]
+            # Find closest window to planned index
+            closest_idx = sorted(clear_windows, key=lambda x: abs(x - planned_departure_index))[0]
             
-            shift_intervals = planned_departure_index - shift_to_index
+            shift_intervals = closest_idx - planned_departure_index
             shift_mins = shift_intervals * 5
             
-            logger.info(f"Issuing severity ALERT for route {route_id}. Balanced shift: {shift_mins}m")
+            direction = "later" if shift_mins > 0 else "early"
+            
+            logger.info(f"Issuing severity ALERT for route {route_id}. Shift: {shift_mins}m")
             return {
                 "status": "ALERT",
-                "message": f"SEVERE CONGESTION PREDICTED! We recommend leaving approx. {shift_mins} minutes early to balance city traffic.",
-                "predicted_volume_if_no_change": planned_volume,
-                "suggested_shift_mins": -shift_mins,
+                "message": f"HEAVY TRAFFIC PREDICTED. Leave {abs(shift_mins)} mins {direction} to save time.",
+                "predicted_volume": planned_volume,
+                "suggested_shift_mins": shift_mins,
                 "orchestration_mode": "Balanced"
             }
                 
-        # If we get here, it's jammed now and stays jammed until their departure.
+        # If we get here, the entire 30 minute window is jammed
         return {
             "status": "WARNING",
-            "message": "Traffic is already heavy and building. Prepare for delays.",
+            "message": "Heavy traffic for the entire 30-min window. Expect delays.",
             "predicted_volume": planned_volume,
             "suggested_shift_mins": 0
         }

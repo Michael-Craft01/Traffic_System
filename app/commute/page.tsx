@@ -1,19 +1,16 @@
 "use client";
-import { useState, useCallback, useEffect } from "react";
-import { fetchForecast, fetchRecommendation, ForecastResult, RecommendationResult } from "@/lib/api";
+import { useState, useEffect } from "react";
+import TrafficMap, { CAMERA_NODES } from "@/components/TrafficMap";
+import { fetchForecast, fetchRecommendation, ForecastResult, RecommendationResult, fetchTrafficState } from "@/lib/api";
 import { 
-  Map as RouteIcon,
-  MapPin,
-  Clock,
-  TrendingDown,
-  TrendingUp,
-  BrainCircuit,
-  Lightbulb,
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  Info
+  getSavedRoutes, getRecentRoutes, addRecentRoute, saveRoute, deleteSavedRoute, SavedRoute, RecentRoute 
+} from "@/lib/storage";
+import { 
+  Map as RouteIcon, MapPin, TrendingDown, TrendingUp,
+  BrainCircuit, AlertTriangle, CheckCircle2, ChevronRight, Info, Search, Route,
+  History, Star, Plus, Clock, X, Trash2
 } from "lucide-react";
+import { useMapsLibrary } from "@vis.gl/react-google-maps";
 
 const WINDOWS = [
   { label: "Now",   mins: 0 },
@@ -21,222 +18,370 @@ const WINDOWS = [
   { label: "+ 10m", mins: 10 },
   { label: "+ 15m", mins: 15 },
   { label: "+ 20m", mins: 20 },
-  { label: "+ 30m", mins: 30 },
+  { label: "+ 25m", mins: 25 },
 ];
 
 export default function CommutePage() {
   const [selectedMins, setSelectedMins] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [dynamicPath, setDynamicPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [intersectingCams, setIntersectingCams] = useState<string[]>([]);
   
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [recommendation, setRecommendation] = useState<RecommendationResult | null>(null);
+  const [sensorData, setSensorData] = useState<any>(null);
+
+  // Storage State
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>([]);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveTime, setSaveTime] = useState("");
+
+  const routesLib = useMapsLibrary("routes");
+  const geometryLib = useMapsLibrary("geometry");
   
+  const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService>();
+
+  const loadLists = () => {
+    setSavedRoutes(getSavedRoutes());
+    setRecentRoutes(getRecentRoutes());
+  };
+
   useEffect(() => {
-    const loadInitial = async () => {
-      const data = await fetchForecast("cam_main_01");
-      setForecast(data);
-      setLoadingInitial(false);
-    };
-    loadInitial();
+    loadLists();
+    if (!routesLib) return;
+    setDirectionsService(new routesLib.DirectionsService());
+  }, [routesLib]);
+
+  // Load basic sensor data for the map
+  useEffect(() => {
+    fetchTrafficState().then(setSensorData);
   }, []);
+
+  const handleSearch = async (oOverride?: string, dOverride?: string) => {
+    const o = oOverride || origin;
+    const d = dOverride || destination;
+    if (!o || !d || !directionsService || !geometryLib) return;
+    
+    setLoading(true);
+    setRecommendation(null);
+    setForecast(null);
+
+    try {
+      const response = await directionsService.route({
+        origin: o,
+        destination: d,
+        travelMode: google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: false,
+      });
+
+      if (!response.routes || response.routes.length === 0) {
+        throw new Error("No driving route found.");
+      }
+
+      const route = response.routes[0];
+      const overviewPath = route.overview_path.map(pt => ({
+        lat: pt.lat(),
+        lng: pt.lng()
+      }));
+      
+      setDynamicPath(overviewPath);
+
+      // Robust Auto-Save to History
+      const leg = route.legs[0];
+      addRecentRoute({
+        origin: { name: leg.start_address || o, lat: leg.start_location.lat(), lng: leg.start_location.lng() },
+        destination: { name: leg.end_address || d, lat: leg.end_location.lat(), lng: leg.end_location.lng() }
+      });
+      loadLists();
+
+      // Simple collision detection with existing ML camera nodes
+      const foundCams = new Set<string>();
+      route.overview_path.forEach(pt => {
+        CAMERA_NODES.forEach(cam => {
+          const camLatLng = new google.maps.LatLng(cam.lat, cam.lng);
+          const distance = geometryLib.spherical.computeDistanceBetween(pt, camLatLng);
+          if (distance <= 1000) foundCams.add(cam.id);
+        });
+      });
+      setIntersectingCams(Array.from(foundCams));
+
+      // Auto-analyze
+      if (oOverride || dOverride) {
+        setOrigin(o);
+        setDestination(d);
+      }
+
+    } catch (e: any) {
+      alert("Failed to find route: " + (e.message || "Unknown error"));
+    }
+    setLoading(false);
+  };
 
   const analyze = async () => {
     setLoading(true);
+    if (intersectingCams.length === 0) {
+       setRecommendation({
+         status: "CLEAR",
+         message: "Your route avoids all monitored congestion zones.",
+         backend_online: true,
+         error: null,
+         suggested_shift_mins: 0
+       });
+       setLoading(false);
+       return;
+    }
+    const targetCam = intersectingCams[0];
     const [rcm, fcast] = await Promise.all([
-      fetchRecommendation("cam_main_01", selectedMins),
-      fetchForecast("cam_main_01")
+      fetchRecommendation(targetCam, selectedMins),
+      fetchForecast(targetCam)
     ]);
-    
     setRecommendation(rcm);
     setForecast(fcast);
     setLoading(false);
   };
 
+  const handleSave = () => {
+    if (!saveName || dynamicPath.length === 0) return;
+    saveRoute({
+      id: `saved_${Date.now()}`,
+      label: saveName,
+      origin: { name: origin, lat: dynamicPath[0].lat, lng: dynamicPath[0].lng },
+      destination: { name: destination, lat: dynamicPath[dynamicPath.length-1].lat, lng: dynamicPath[dynamicPath.length-1].lng },
+      scheduledTime: saveTime || undefined
+    });
+    setShowSaveModal(false);
+    setSaveName("");
+    setSaveTime("");
+    loadLists();
+  };
+
+  const removeSaved = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteSavedRoute(id);
+    loadLists();
+  };
+
+  const removeRecent = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteRecentRoute(id);
+    loadLists();
+  };
+
   return (
-    <div className="h-full overflow-y-auto bg-zinc-100 pb-20 relative">
-      
-      {/* Background Mesh */}
-      <div className="fixed inset-0 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-zinc-300 via-zinc-100 to-zinc-50" />
+    <div className="h-full flex flex-col bg-zinc-100 relative">
       
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl px-5 pt-8 pb-5 border-b border-white/60 shadow-sm shadow-black/5">
-        <h1 className="text-2xl font-black text-black tracking-tight flex items-center gap-2">
-          <RouteIcon className="text-black" size={24} strokeWidth={3} />
-          Smart Commute
-        </h1>
-        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mt-1">
-          AI-Powered Departure Planning
-        </p>
+      <div className="z-10 bg-white/90 backdrop-blur-xl px-5 pt-8 pb-4 border-b border-white/60 shadow-sm shrink-0">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-black text-black tracking-tight flex items-center gap-2">
+            <RouteIcon className="text-black" size={24} strokeWidth={3} />
+            Route Brain
+          </h1>
+          {recentRoutes.length > 0 && (
+             <button onClick={() => { localStorage.removeItem("traffic_recent_routes"); loadLists(); }} 
+               className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest hover:text-red-500 transition-colors">
+               Clear history
+             </button>
+          )}
+        </div>
+        
+        {/* Search Inputs */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+             <div className="w-1.5 h-1.5 rounded-full bg-black shrink-0 ml-3" />
+             <input type="text" placeholder="Start Point" 
+               value={origin} onChange={e=>setOrigin(e.target.value)}
+               className="flex-1 bg-zinc-100/80 border border-black/5 rounded-xl px-4 py-2.5 text-sm font-bold placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black/10 transition-all font-mono" 
+             />
+          </div>
+          <div className="flex items-center gap-3">
+             <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 ml-3" />
+             <input type="text" placeholder="Destination" 
+               value={destination} onChange={e=>setDestination(e.target.value)}
+               className="flex-1 bg-zinc-100/80 border border-black/5 rounded-xl px-4 py-2.5 text-sm font-bold placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-black/10 transition-all font-mono" 
+             />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => handleSearch()} disabled={loading || !origin || !destination || !directionsService} 
+              className="flex-1 mt-2 bg-black text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-md disabled:bg-zinc-300">
+              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={16} />}
+              Analyze Route
+            </button>
+            {dynamicPath.length > 0 && (
+              <button onClick={() => setShowSaveModal(true)} className="mt-2 bg-white border border-black/10 px-4 py-3 rounded-xl text-black shadow-sm active:scale-95 transition-all">
+                <Star size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* History / Saved Reel */}
+        {(savedRoutes.length > 0 || recentRoutes.length > 0) && (
+          <div className="flex gap-2 overflow-x-auto mt-4 pb-1 scrollbar-hide -mx-5 px-5">
+            {savedRoutes.map(r => (
+              <div key={r.id} className="relative group shrink-0">
+                <button onClick={() => handleSearch(r.origin.name, r.destination.name)}
+                  className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-full text-xs font-bold shadow-md shadow-black/10 active:scale-95 transition-all">
+                  <Star size={10} fill="white" /> {r.label}
+                </button>
+                <button onClick={(e) => removeSaved(e, r.id)} className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full border border-black/10 flex items-center justify-center text-black hidden group-hover:flex hover:bg-black hover:text-white transition-all shadow-sm">
+                   <X size={8} />
+                </button>
+              </div>
+            ))}
+            {recentRoutes.map(r => (
+              <div key={r.id} className="relative group shrink-0">
+                <button onClick={() => handleSearch(r.origin.name, r.destination.name)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-black/5 text-zinc-600 rounded-full text-xs font-bold shadow-sm active:scale-95 transition-all">
+                  <History size={10} /> {r.destination.name.split(',')[0]}
+                </button>
+                <button onClick={(e) => removeRecent(e, r.id)} className="absolute -top-1 -right-1 w-4 h-4 bg-black rounded-full flex items-center justify-center text-white hidden group-hover:flex hover:bg-white hover:text-black hover:border border-black/10 transition-all shadow-sm">
+                   <X size={8} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="p-5 space-y-6 relative z-10">
-        
-        {/* Route Card */}
-        <section>
-          <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">
-            Your Route
-          </h2>
-          <div className="bg-white/70 backdrop-blur-xl border border-white/60 rounded-3xl p-1 shadow-lg shadow-black/5">
-            <div className="flex items-center gap-4 p-4">
-               <div className="w-10 h-10 rounded-2xl bg-zinc-100 border border-black/5 flex items-center justify-center shrink-0">
-                 <MapPin className="text-black" size={20} />
-               </div>
-               <div className="text-left flex-1">
-                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">From</p>
-                 <p className="font-bold text-black mt-0.5">Home (Sector 7)</p>
-               </div>
-            </div>
-            <div className="w-px h-6 bg-zinc-200 mx-auto -my-3 relative z-10" />
-            <div className="flex items-center gap-4 p-4 border-t border-black/5 bg-black/[0.02] rounded-b-3xl">
-               <div className="w-10 h-10 rounded-2xl bg-black flex items-center justify-center shrink-0 shadow-md shadow-black/20">
-                 <MapPin className="text-white" size={20} />
-               </div>
-               <div className="text-left flex-1">
-                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">To</p>
-                 <p className="font-bold text-black mt-0.5">Office (CBD North)</p>
-               </div>
-            </div>
-          </div>
-        </section>
+      {/* Save Modal Overlays */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-[2000] bg-black/40 backdrop-blur-sm flex items-end justify-center p-4">
+           <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300">
+              <div className="flex justify-between items-start mb-6">
+                 <div>
+                    <h2 className="text-xl font-black text-black">Save this Route</h2>
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mt-1">Setup proactive monitoring</p>
+                 </div>
+                 <button onClick={() => setShowSaveModal(false)} className="p-2 bg-zinc-100 rounded-full text-zinc-400 hover:text-black">
+                    <X size={20} />
+                 </button>
+              </div>
+              <div className="space-y-4">
+                 <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5 ml-1">Route Label</label>
+                    <input type="text" placeholder="e.g. Home, Office, Gym" value={saveName} onChange={e=>setSaveName(e.target.value)}
+                      className="w-full bg-zinc-100 border-none rounded-xl px-4 py-3 font-bold text-black focus:ring-2 focus:ring-black/10 transition-all" />
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5 ml-1">Daily Departure Time (Optional)</label>
+                    <div className="relative">
+                       <Clock className="absolute left-4 top-3.5 text-zinc-400" size={16} />
+                       <input type="time" value={saveTime} onChange={e=>setSaveTime(e.target.value)}
+                         className="w-full bg-zinc-100 border-none rounded-xl pl-12 pr-4 py-3 font-bold text-black focus:ring-2 focus:ring-black/10 transition-all" />
+                    </div>
+                 </div>
+                 <button onClick={handleSave} className="w-full bg-black text-white font-bold py-4 rounded-2xl shadow-xl shadow-black/20 mt-4 active:scale-95 transition-all">
+                    Register Permanent Monitoring
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
-        {/* Departure Time */}
-        <section>
-          <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">
-            Planned Departure
-          </h2>
-          <div className="flex gap-2 overflow-x-auto pb-4 pt-1 scrollbar-hide -mx-5 px-5">
-            {WINDOWS.map((w) => {
-              const active = selectedMins === w.mins;
-              return (
-                <button
-                  key={w.mins}
-                  onClick={() => setSelectedMins(w.mins)}
-                  className={`shrink-0 px-6 py-4 rounded-2xl border text-sm font-bold transition-all ${
-                    active 
-                      ? "bg-black text-white border-black shadow-xl shadow-black/20 transform scale-105" 
-                      : "bg-white/70 backdrop-blur-md text-zinc-600 border-white/60 shadow-sm hover:bg-white relative top-1"
-                  }`}
-                >
-                  {w.label}
-                </button>
-              );
-            })}
+      {/* Map Hero Area */}
+      <div className="flex-1 min-h-[300px] relative z-0">
+        {sensorData ? (
+           <TrafficMap sensorData={sensorData} dynamicPath={dynamicPath.length > 0 ? dynamicPath : undefined} />
+        ) : (
+           <div className="w-full h-full bg-zinc-200 animate-pulse flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-black/10 border-t-black rounded-full animate-spin" />
+           </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-zinc-100 to-transparent z-[1000] pointer-events-none" />
+      </div>
+
+      {/* Controls Area */}
+      <div className="shrink-0 p-5 z-10 bg-zinc-100 pb-24">
+        {dynamicPath.length > 0 && !recommendation && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center mb-6">
+             <span className="text-[10px] font-black uppercase text-zinc-500 bg-white shadow-sm border border-black/5 px-4 py-2 rounded-full inline-flex items-center gap-2">
+               <Route size={14} className="text-blue-500"/>
+               Route snapped to {intersectingCams.length} AI nodes.
+             </span>
+             <button onClick={analyze} disabled={loading}
+               className="w-full mt-4 bg-black text-white font-bold py-4 rounded-xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+               <BrainCircuit size={20} /> Evaluation Route Quality
+             </button>
           </div>
-          
-          <button
-            onClick={analyze}
-            disabled={loading}
-            className="w-full mt-2 bg-black active:bg-zinc-800 text-white font-bold py-4 rounded-xl shadow-lg shadow-black/20 flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
-          >
-            {loading ? (
-               <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Analyzing...
-               </>
-            ) : (
-               <>
-                  <BrainCircuit size={20} />
-                  Analyze Commute Window
-               </>
-            )}
-          </button>
-        </section>
+        )}
 
         {/* Results */}
         {recommendation && (
-          <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1 flex items-center gap-1.5">
-              <BrainCircuit size={12} className="text-black" />
-              AI Recommendation
-            </h2>
-            
-            <div className={`border rounded-3xl p-6 shadow-xl shadow-black/5 ${
-              recommendation.status === "CLEAR" ? "bg-white/90 border-white/60" :
-              recommendation.status === "WARNING" ? "bg-zinc-100/90 border-white/60" :
-              recommendation.status === "ALERT" ? "bg-zinc-200/90 border-white/60" :
-              "bg-white/70 border-white/60"
-            } backdrop-blur-xl`}>
-              
-              <div className="flex items-start gap-4 mb-5">
+          <section className="animate-in zoom-in-95 duration-300">
+            <div className={`border rounded-3xl p-6 shadow-xl ${
+              recommendation.status === "CLEAR" ? "bg-white border-white/60" :
+              recommendation.status === "WARNING" ? "bg-zinc-100 border-zinc-200" :
+              recommendation.status === "ALERT" ? "bg-zinc-200 border-zinc-300" :
+              "bg-white border-white/60"
+            }`}>
+              <div className="flex items-start gap-4 mb-6">
                  <div className={`p-4 rounded-2xl shrink-0 ${
-                    recommendation.status === "CLEAR" ? "bg-zinc-100 text-black border border-black/5" :
-                    recommendation.status === "WARNING" ? "bg-zinc-200 text-black border border-black/10" :
-                    recommendation.status === "ALERT" ? "bg-black text-white shadow-lg shadow-black/20" :
-                    "bg-zinc-100 text-zinc-500"
+                    recommendation.status === "CLEAR" ? "bg-green-600 text-white shadow-lg shadow-green-600/20" :
+                    recommendation.status === "ALERT" ? "bg-black text-white shadow-lg" :
+                    "bg-amber-600 text-white"
                  }`}>
                    {recommendation.status === "CLEAR" && <CheckCircle2 size={24} />}
-                   {recommendation.status === "WARNING" && <AlertTriangle size={24} />}
-                   {recommendation.status === "ALERT" && <AlertTriangle size={24} strokeWidth={2.5}/>}
-                   {recommendation.status === "error" && <Info size={24} />}
+                   {(recommendation.status === "ALERT" || recommendation.status === "WARNING") && <AlertTriangle size={24} />}
                  </div>
                  
                  <div className="pt-1">
-                   <p className="font-black text-lg text-black leading-tight mb-1.5">
+                   <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">AI Recommendation</h2>
+                   <p className="font-black text-lg text-black leading-tight">
                      {recommendation.message}
                    </p>
-                   {recommendation.suggested_shift_mins ? (
-                     <p className="text-sm font-bold text-zinc-500 flex items-center gap-1 hover:text-black cursor-pointer transition-colors" onClick={() => setSelectedMins(recommendation.suggested_shift_mins || 0)}>
-                       Try +{recommendation.suggested_shift_mins}m instead <ChevronRight size={16}/>
-                     </p>
-                   ) : null}
                  </div>
               </div>
 
-              {/* Stats Box */}
-              {(recommendation.predicted_volume !== undefined || forecast?.forecast_30_mins) && (
-                <div className="bg-white/80 rounded-2xl p-4 grid grid-cols-2 gap-4 border border-black/5 shadow-inner">
-                   {recommendation.predicted_volume !== undefined && (
-                     <div>
-                       <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Est. Volume</p>
-                       <p className="font-black text-2xl text-black">{recommendation.predicted_volume} <span className="text-xs font-semibold text-zinc-400 normal-case tracking-normal">veh/hr</span></p>
-                     </div>
-                   )}
-                   {forecast?.forecast_30_mins && forecast.forecast_30_mins.length > 0 && (
-                     <div>
-                       <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Trend</p>
-                       <div className="flex items-center gap-1.5 mt-2">
-                          {forecast.forecast_30_mins[0] < forecast.forecast_30_mins[forecast.forecast_30_mins.length-1] ? (
-                             <><TrendingUp size={20} className="text-black"/><span className="text-sm font-bold text-black">Rising</span></>
-                          ) : (
-                             <><TrendingDown size={20} className="text-zinc-600"/><span className="text-sm font-bold text-zinc-600">Falling</span></>
-                          )}
+              {/* Forecast Chart */}
+              {forecast && forecast.forecast_30_mins.length > 0 && (
+                <div className="mt-4 pt-6 border-t border-black/5">
+                   <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                     <TrendingUp size={12} /> 30m Traffic Projection
+                   </h3>
+                   <div className="flex items-end gap-1 h-12 mb-2">
+                     {forecast.forecast_30_mins.map((val, i) => (
+                       <div key={i} className="flex-1 bg-black/10 rounded-t-sm transition-all hover:bg-black origin-bottom group relative" 
+                         style={{ height: `${Math.max(10, (val / Math.max(...forecast.forecast_30_mins)) * 100)}%` }}>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black text-white text-[8px] font-bold px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            {val}
+                          </div>
                        </div>
-                     </div>
-                   )}
+                     ))}
+                   </div>
+                   <div className="flex justify-between text-[8px] font-bold text-zinc-400 uppercase">
+                     <span>T+0m</span>
+                     <span>T+15m</span>
+                     <span>T+30m</span>
+                   </div>
                 </div>
               )}
-              
-              {!recommendation.backend_online && (
-                 <p className="text-[10px] font-bold text-zinc-500 uppercase text-center mt-4 tracking-wider bg-black/5 py-1.5 rounded-full inline-block w-full">
-                   ⚠ Using offline ML inference model
-                 </p>
-              )}
+            </div>
+
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-4 pt-1 scrollbar-hide">
+              {WINDOWS.map((w) => {
+                const active = selectedMins === w.mins;
+                return (
+                  <button key={w.mins} onClick={() => { setSelectedMins(w.mins); setTimeout(analyze, 100); }}
+                    className={`shrink-0 px-5 py-3 rounded-xl border text-[11px] font-bold transition-all ${
+                      active ? "bg-black text-white border-black shadow-lg scale-105" : "bg-white text-zinc-400 border-zinc-200"
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                );
+              })}
             </div>
           </section>
         )}
-
-        {/* Tips Section */}
-        <section className="bg-white/50 backdrop-blur-md border border-white/60 shadow-sm shadow-black/5 rounded-3xl p-6 mb-8">
-           <h2 className="text-[10px] font-bold text-black uppercase tracking-widest mb-4 flex items-center gap-2">
-              <Lightbulb size={14} className="text-black" />
-              General Guidance
-           </h2>
-           <ul className="space-y-4">
-             {[
-               "Morning peak is typically 07:30 - 08:45 AM.",
-               "Leaving 15 minutes early can save 25% trip time.",
-               "AI Brain analyzes 12 past data points to predict the next 6 time windows."
-             ].map((tip, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm font-semibold text-zinc-700 border-b border-black/5 pb-4 last:border-0 last:pb-0">
-                  <div className="w-1.5 h-1.5 rounded-full bg-black mt-1.5 shrink-0" />
-                   {tip}
-                </li>
-             ))}
-           </ul>
-        </section>
-
       </div>
     </div>
   );
 }
+
+
