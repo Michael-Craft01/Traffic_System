@@ -6,33 +6,33 @@ from ultralytics import YOLO
 import time
 import threading
 
-# --- CONFIGURATION (EDIT THIS) ---
-# 1. Your Phone's IP (Find this in the IP Webcam app)
-# Example: "192.168.2.178"
-PHONE_IP = "172.20.10.4" 
+import argparse
 
-# 2. Port (Default is 8080)
-PORT = "8080"
+# --- ARGUMENT PARSING ---
+parser = argparse.ArgumentParser(description="Traffic AI Detector Node")
+parser.add_argument("--ip", type=str, default="0", help="IP address of the phone camera (use '0' for webcam)")
+parser.add_argument("--port", type=str, default="8080", help="Port of the IP camera app")
+parser.add_argument("--camera_id", type=str, default="cam_main_01", help="ID of this node")
+parser.add_argument("--url", type=str, default="http://127.0.0.1:8000/api/v1/ingest/camera", help="Backend ingestion URL")
+args = parser.parse_args()
 
-# 3. Backend Integration
-BACKEND_URL = "http://127.0.0.1:8000/api/v1/ingest/camera"
-CAMERA_ID = "cam_main_01" 
+PHONE_IP = args.ip
+PORT = args.port
+BACKEND_URL = args.url
+CAMERA_ID = args.camera_id
 
-# --- SYSTEM SETTINGS (DO NOT EDIT UNLESS NEEDED) ---
+# --- SYSTEM SETTINGS ---
 DATA_FILE = os.path.join(os.path.dirname(__file__), '../public/traffic_data.json')
 FRAME_FILE = os.path.join(os.path.dirname(__file__), '../public/processed_frame.jpg')
 
-# PHONE_IP always takes priority.
-# Only falls back to env var if PHONE_IP is blank.
 if PHONE_IP and PHONE_IP != "0":
     VIDEO_SOURCE = f"http://{PHONE_IP}:{PORT}/video"
 elif PHONE_IP == "0":
     VIDEO_SOURCE = 0
 else:
-    env_source = os.getenv("TRAFFIC_VIDEO_SOURCE", "0")
-    VIDEO_SOURCE = int(env_source) if env_source.isdigit() else env_source
+    VIDEO_SOURCE = 0
 
-print(f"📡 Video Source: {VIDEO_SOURCE}")
+print(f"📡 AI Node: {CAMERA_ID} | Source: {VIDEO_SOURCE}")
 
 # Ensure directory exists
 os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
@@ -87,12 +87,8 @@ def start_detection():
     print("   (Press 'q' to stop)")
 
     # --- TRACKING & COUNTING SETUP ---
-    # Dictionary to keep track of a vehicle's previous center position
-    track_history = {}  # {track_id: previous_center_y}
-    
-    # We define a tripwire (horizontal line). We'll set it at Y=300 as a default.
-    # In a real setup, this would be configurable based on the camera angle.
-    TRIPWIRE_Y = 300 
+    # Set to keep track of unique vehicle IDs seen in this session
+    seen_ids = set()
     
     # Total count of vehicles that have crossed the line
     total_vehicles_passed = 0
@@ -110,7 +106,12 @@ def start_detection():
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("⚠️ Video stream lost. Retrying in 5 seconds...")
+            print(f"[WARN] Connection to {VIDEO_SOURCE} failed.")
+            print(">>> NETWORK CHECKLIST:")
+            print("1. Is the 'IP Webcam' app started on your phone?")
+            print("2. Are BOTH phone and PC on the same Wi-Fi?")
+            print("3. Try a Mobile Hotspot if your current Wi-Fi blocks devices.")
+            print("Retrying in 5 seconds...")
             cap.release()
             time.sleep(5)
             cap = cv2.VideoCapture(VIDEO_SOURCE)
@@ -128,13 +129,7 @@ def start_detection():
         # This makes the detection grid 4x smaller, hugely increasing FPS!
         results = model.track(frame, persist=True, verbose=False, imgsz=320, classes=[2, 3, 5, 7]) 
         
-        # Draw the tripwire on the frame
-        height, width, _ = frame.shape
-        # Set tripwire relative to frame height if we want it dynamic, 
-        # or just use a fixed value. Let's use 60% down the screen.
-        TRIPWIRE_Y = int(height * 0.6) 
-        cv2.line(frame, (0, TRIPWIRE_Y), (width, TRIPWIRE_Y), (0, 0, 255), 2)
-        cv2.putText(frame, "TRIPWIRE", (10, TRIPWIRE_Y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        # Visual tracking processing
 
         current_frame_vehicles = 0
         
@@ -161,24 +156,11 @@ def start_detection():
                 cv2.circle(frame, (center_x, center_y), 5, (255, 0, 0), -1)
                 cv2.putText(frame, f"{name} #{track_id}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # --- LINE CROSSING LOGIC ---
-                if track_id in track_history:
-                    prev_y = track_history[track_id]
-                    
-                    # Check if the vehicle's bottom center crossed the line
-                    # Example: Driving DOWN the screen
-                    if prev_y < TRIPWIRE_Y and center_y >= TRIPWIRE_Y:
-                        total_vehicles_passed += 1
-                        print(f"✅ Vehicle Crossed! Total Flow: {total_vehicles_passed}")
-                        
-                        # Flash the line green to show a detection visually
-                        cv2.line(frame, (0, TRIPWIRE_Y), (width, TRIPWIRE_Y), (0, 255, 0), 5)
-                        
-                    # We could also add logic for driving UP the screen by checking:
-                    # elif prev_y > TRIPWIRE_Y and center_y <= TRIPWIRE_Y:
-                
-                # Update tracking history for the next frame
-                track_history[track_id] = center_y
+                # --- UNIQUE VEHICLE COUNTING ---
+                if track_id not in seen_ids:
+                    seen_ids.add(track_id)
+                    total_vehicles_passed = len(seen_ids)
+                    print(f"[OK] New Vehicle Detected! Total Flow: {total_vehicles_passed}")
 
         # We base current status roughly on how many cars are on screen right now, 
         # but the JSON payload will pass the cumulative volume
@@ -189,7 +171,11 @@ def start_detection():
         cv2.putText(frame, f"Total Passed: {total_vehicles_passed}", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
         cv2.putText(frame, f"Status: {status}", (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         
-        cv2.imshow("Traffic AI Vision", frame)
+        cv2.imshow("Traffic AI Vision Node", frame)
+        
+        # REQUIRED for the window to actually show and refresh
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
         
         # Save frame for web dashboard (High-speed "live" feed)
         try:

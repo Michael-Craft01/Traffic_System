@@ -29,8 +29,13 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # AI Node Settings (Read from .env)
+    TRAFFIC_PHONE_IP: str = "127.0.0.1"
+    TRAFFIC_PHONE_PORT: str = "8080"
+    
     class Config:
-        env_file = ".env"
+        # Look for .env in the root project folder
+        env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
         env_file_encoding = "utf-8"
         case_sensitive = True
 

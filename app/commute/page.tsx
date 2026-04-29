@@ -72,6 +72,7 @@ export default function CommutePage() {
     insight?: string,
     status?: string
   } | null>(null);
+  const toastTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setRecentRoutes(getRecentRoutes());
@@ -157,7 +158,9 @@ export default function CommutePage() {
         duration: timeStr,
         distance: distStr
       });
-      setTimeout(() => setToast(null), 6000);
+      
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToast(null), 8000);
 
       const leg = route.legs[0];
       const journey = {
@@ -166,7 +169,16 @@ export default function CommutePage() {
       };
       
       addRecentRoute(journey);
-      if (!silentLog) logJourney({ origin_name: journey.origin.name, dest_name: journey.destination.name });
+      if (!silentLog) {
+        logJourney({ 
+          origin_name: journey.origin.name, 
+          origin_lat: journey.origin.lat,
+          origin_lng: journey.origin.lng,
+          dest_name: journey.destination.name,
+          dest_lat: journey.destination.lat,
+          dest_lng: journey.destination.lng
+        });
+      }
       setRecentRoutes(getRecentRoutes());
 
       const foundCams = new Set<string>();
@@ -180,15 +192,21 @@ export default function CommutePage() {
       
       const camList = Array.from(foundCams);
       setIntersectingCams(camList);
-      if (camList.length > 0) {
-        const aiRec = await runAIForecast(camList);
-        if (aiRec) {
-          setToast(prev => prev ? {
-            ...prev,
-            insight: aiRec.message,
-            status: aiRec.status
-          } : null);
-        }
+      
+      // AI RECOMMENDATION LOGIC
+      // Even if no cameras are found, we trigger a forecast using a "virtual" global ID
+      // so the user always gets a time-of-day based prediction.
+      const aiRec = await runAIForecast(camList.length > 0 ? camList : ["cam_virtual_harare"]);
+      
+      if (aiRec) {
+        setToast(prev => prev ? {
+          ...prev,
+          insight: aiRec.message,
+          status: aiRec.status
+        } : null);
+        
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(null), 8000);
       }
 
     } catch (e: any) {
@@ -205,43 +223,55 @@ export default function CommutePage() {
 
       {/* PREMIUM ROUTE TOAST */}
       {toast && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-12 duration-700 w-[500px]">
-           <div className="bg-white/80 backdrop-blur-3xl border border-white/60 p-6 rounded-[2.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.2)]">
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-                 <div className="flex items-center gap-4">
-                    <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-600/20"><Clock size={18} strokeWidth={3} /></div>
-                    <div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Time</p>
-                       <p className="text-sm font-black text-slate-900 leading-none">{toast.duration}</p>
-                    </div>
+        <div className="absolute top-8 right-8 z-[100] animate-in fade-in slide-in-from-right-12 duration-700 flex flex-col items-end gap-4 max-w-[450px] pointer-events-none">
+           {/* Metrics Row */}
+           <div className="flex gap-4">
+              <div className="bg-white/95 backdrop-blur-2xl border border-white/60 p-5 rounded-[2.5rem] shadow-2xl flex items-center gap-5 pointer-events-auto">
+                 <div className="bg-blue-600 p-3.5 rounded-2xl text-white shadow-xl shadow-blue-600/30"><Clock size={28} strokeWidth={3} /></div>
+                 <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Time</p>
+                    <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter">{toast.duration}</p>
                  </div>
-                 <div className="flex items-center gap-4 px-6 border-x border-slate-100">
-                    <div className="bg-slate-900 p-2.5 rounded-xl text-white shadow-lg shadow-black/20"><Navigation size={18} strokeWidth={3} /></div>
-                    <div>
-                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Distance</p>
-                       <p className="text-sm font-black text-slate-900 leading-none">{toast.distance}</p>
-                    </div>
-                 </div>
-                 {toast.status && (
-                    <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      toast.status === 'ALERT' || toast.status === 'CONGESTED' ? 'bg-red-500 text-white' : 
-                      toast.status === 'WARNING' || toast.status === 'MODERATE' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
-                    }`}>
-                      {toast.status}
-                    </div>
-                 )}
               </div>
-              
-              {toast.insight && (
-                <div className="flex items-start gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                   <div className="p-2 bg-white rounded-lg text-blue-600 shadow-sm"><Sparkles size={16} /></div>
-                   <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">AI Recommendation</p>
-                      <p className="text-xs font-bold text-slate-700 leading-snug">{toast.insight}</p>
-                   </div>
-                </div>
-              )}
+              <div className="bg-white/95 backdrop-blur-2xl border border-white/60 p-5 rounded-[2.5rem] shadow-2xl flex items-center gap-5 pointer-events-auto">
+                 <div className="bg-slate-900 p-3.5 rounded-2xl text-white shadow-xl shadow-black/20"><Navigation size={28} strokeWidth={3} /></div>
+                 <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Distance</p>
+                    <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter">{toast.distance}</p>
+                 </div>
+              </div>
            </div>
+
+           {/* AI Insight Card */}
+           {(toast.status || toast.insight) && (
+              <div className={`bg-white/95 backdrop-blur-3xl border-4 p-8 rounded-[3.5rem] shadow-[0_40px_80px_rgba(0,0,0,0.25)] animate-in slide-in-from-bottom-6 duration-700 pointer-events-auto flex flex-col gap-6 ${
+                toast.status === 'ALERT' || toast.status === 'CONGESTED' ? 'border-red-500' : 
+                toast.status === 'WARNING' || toast.status === 'MODERATE' ? 'border-amber-500' : 
+                toast.status === 'error' ? 'border-slate-800' : 'border-emerald-500'
+              }`}>
+                 <div className="flex items-center justify-between gap-12">
+                    <div className="flex items-center gap-4">
+                       <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/30"><Sparkles size={20} /></div>
+                       <div>
+                          <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest leading-none mb-1">AI Intelligence</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Real-time Forecast</p>
+                       </div>
+                    </div>
+                    <div className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg ${
+                      toast.status === 'ALERT' || toast.status === 'CONGESTED' ? 'bg-red-500 text-white shadow-red-500/30' : 
+                      toast.status === 'WARNING' || toast.status === 'MODERATE' ? 'bg-amber-500 text-white shadow-amber-500/30' : 
+                      toast.status === 'error' ? 'bg-slate-800 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
+                    }`}>
+                      {toast.status === 'error' ? 'AI OFFLINE' : toast.status || 'CLEAR'}
+                    </div>
+                 </div>
+                 <div className="bg-slate-50/80 p-5 rounded-[2rem] border border-slate-100">
+                    <p className="text-[15px] font-bold text-slate-800 leading-snug">
+                       {toast.insight || 'Your planned route looks optimal for current conditions. No shift suggested.'}
+                    </p>
+                 </div>
+              </div>
+           )}
         </div>
       )}
 
@@ -332,7 +362,8 @@ export default function CommutePage() {
         {recommendation && (
            <div className={`rounded-[3.5rem] p-10 shadow-2xl pointer-events-auto animate-in slide-in-from-left-16 duration-500 relative overflow-hidden border-4 border-white/30 ${
               recommendation.status === 'ALERT' || recommendation.status === 'CONGESTED' ? 'bg-red-600 text-white' : 
-              recommendation.status === 'WARNING' || recommendation.status === 'MODERATE' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
+              recommendation.status === 'WARNING' || recommendation.status === 'MODERATE' ? 'bg-amber-500 text-white' : 
+              recommendation.status === 'error' ? 'bg-slate-800 text-slate-300' : 'bg-emerald-500 text-white'
            }`}>
               <div className="flex justify-between items-start mb-10 relative z-10">
                  <div className="bg-white/25 p-5 rounded-[1.5rem] backdrop-blur-md shadow-inner">
@@ -342,7 +373,8 @@ export default function CommutePage() {
                  <button onClick={() => setRecommendation(null)} className="p-3 bg-black/10 rounded-full"><X size={24}/></button>
               </div>
               <h2 className="text-5xl font-black mb-4 tracking-tighter uppercase leading-none relative z-10">
-                 {recommendation.status === 'ALERT' || recommendation.status === 'CONGESTED' ? 'Traffic Alert' : 'Route Clear'}
+                 {recommendation.status === 'ALERT' || recommendation.status === 'CONGESTED' ? 'Traffic Alert' : 
+                  recommendation.status === 'error' ? 'AI Offline' : 'Route Clear'}
               </h2>
               <p className="text-base font-bold opacity-90 leading-snug mb-10 max-w-[300px] relative z-10">{recommendation.message}</p>
               <div className="mb-10 relative z-10">

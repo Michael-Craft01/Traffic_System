@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import ingestion, mobile, routing, telemetry
+from api import ingestion, mobile, routing, telemetry, camera
 from core.config import settings
 from core.logger import get_logger
 from core.database import init_db
@@ -10,11 +10,26 @@ init_db()
 
 logger = get_logger("main")
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup Logic
+    logger.info("Initializing Traffic System Brain...")
+    init_db()
+    # Auto-start the hardcoded AI Node from .env
+    from core.camera_service import camera_service
+    camera_service.auto_start()
+    yield
+    # Shutdown Logic
+    logger.info("Shutting down Traffic System...")
+
 # 1. Initialize the FastAPI Application
 app = FastAPI(
     title=settings.API_TITLE,
     description="The central nervous system connecting CV Cameras, ML Brain, and Mobile Apps.",
-    version=settings.API_VERSION
+    version=settings.API_VERSION,
+    lifespan=lifespan
 )
 
 # 2. Configure CORS (Allows web dashboards to talk to this API)
@@ -38,6 +53,9 @@ app.include_router(routing.router, prefix="/api/v1/routing", tags=["Recommendati
 
 # e.g., POST to http://localhost:8000/api/v1/telemetry/log
 app.include_router(telemetry.router, prefix="/api/v1/telemetry", tags=["Usage Telemetry"])
+
+# e.g., POST to http://localhost:8000/api/v1/camera/connect
+app.include_router(camera.router, prefix="/api/v1/camera", tags=["Live Camera Control"])
 
 @app.get("/")
 async def root():

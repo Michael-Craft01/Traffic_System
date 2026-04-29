@@ -64,11 +64,22 @@ export interface PatternResponse {
 // ── Fetch helpers ─────────────────────────────────────────────────
 const TIMEOUT_MS = 6000;
 
-async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  
+  // Inject demo token for development robustness
+  const headers = {
+    ...options.headers,
+    "Authorization": "Bearer demo-token"
+  };
+
   try {
-    const res = await fetch(`http://localhost:8000/api/v1${url}`, { ...options, signal: controller.signal });
+    const res = await fetch(`http://localhost:8000/api/v1${url}`, { 
+      ...options, 
+      headers,
+      signal: controller.signal 
+    });
     return res;
   } finally {
     clearTimeout(timer);
@@ -139,7 +150,7 @@ export async function fetchRecommendation(
   try {
     const res = await apiFetch("/routing/check-commute", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer demo-token" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         user_id: "local_user_01",
         route_id: routeId,
@@ -199,5 +210,41 @@ export async function reportIncident(
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message };
+  }
+}
+
+// ── Camera Control functions ───────────────────────────────────────
+
+export async function connectCamera(ip: string, port: string = "8080", cameraId: string = "cam_main_01"): Promise<any> {
+  try {
+    const res = await apiFetch("/camera/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ip, port, camera_id: cameraId }),
+    });
+    return await res.json();
+  } catch (e) {
+    return { status: "error", message: "Failed to connect to backend" };
+  }
+}
+
+export async function disconnectCamera(): Promise<any> {
+  try {
+    const res = await apiFetch("/camera/disconnect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    return await res.json();
+  } catch (e) {
+    return { status: "error", message: "Failed to disconnect" };
+  }
+}
+
+export async function getCameraStatus(): Promise<any> {
+  try {
+    const res = await apiFetch("/camera/status");
+    return await res.json();
+  } catch (e) {
+    return { is_running: false };
   }
 }

@@ -15,12 +15,19 @@ class RecommendationEngine:
         if not ml_brain:
             return {"status": "error", "message": "ML Engine offline."}
             
-        recent_data = get_recent_history(route_id)
-        
-        try:
-            predictions = ml_brain.predict_future_traffic(recent_data)
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        if route_id.startswith("cam_virtual"):
+            # Provide a location-agnostic forecast based purely on time of day
+            import datetime
+            now = datetime.datetime.now()
+            from core.ml_integration import _synthetic_volume
+            # Generate predictions for the next 30 mins
+            predictions = [_synthetic_volume((now + datetime.timedelta(minutes=i*5)).hour, now.weekday()) for i in range(6)]
+        else:
+            recent_data = get_recent_history(route_id)
+            try:
+                predictions = ml_brain.predict_future_traffic(recent_data)
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
 
         if planned_departure_index >= len(predictions):
             return {
