@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import TrafficMap, { CAMERA_NODES } from "@/components/TrafficMap";
+import MapProvider from "@/components/MapProvider";
 import { fetchTrafficState, TrafficState, fetchIncidents, Incident } from "@/lib/api";
 import { 
   TrendingUp, 
@@ -17,7 +18,8 @@ import {
   CarFront,
   Clock,
   Radio,
-  ChevronRight
+  ChevronRight,
+  CheckCircle2
 } from "lucide-react";
 import Link from "next/link";
 
@@ -105,7 +107,7 @@ export default function DashboardPage() {
 
       {/* ── Map Layer (40% height on most screens) ── */}
       <div className="flex-none h-[40vh] w-full relative z-0">
-         <TrafficMap sensorData={liveState} />
+         <MapProvider sensorData={liveState} />
          {/* Gradient fade to seamlessly blend map with bottom sheet */}
          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/80 to-transparent z-[1000] pointer-events-none" />
       </div>

@@ -1,11 +1,10 @@
-// Minimal Service Worker for PWA compliance
-const CACHE_NAME = 'traffic-brain-v1';
-
-self.addEventListener('install', (event) => {
-    console.log('[Service Worker] Install');
+// Service Worker deactivated to prevent interference with Google Maps API
+self.addEventListener('install', () => {
+    self.skipWaiting();
 });
 
-self.addEventListener('fetch', (event) => {
-    // Simple pass-through for now, as we rely on live data
-    event.respondWith(fetch(event.request));
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
 });
+
+// No fetch listener = No interception

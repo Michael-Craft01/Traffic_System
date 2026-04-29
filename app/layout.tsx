@@ -1,38 +1,29 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import BottomNav from "@/components/BottomNav";
-import MapProvider from "@/components/MapProvider";
-import NotificationEngine from "@/components/NotificationEngine";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], display: "swap" });
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  themeColor: "#ffffff",
-};
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Traffic Brain", template: "%s · Traffic Brain" },
-  description:
-    "Real-time AI-powered traffic orchestration — live congestion monitoring, smart commute recommendations, and crowd-sourced incident reporting.",
-  manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Traffic Brain" },
+  title: "Route Brain | AI Traffic Management",
+  description: "Advanced traffic congestion monitoring and route analysis for Zimbabwe.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en" className={inter.className}>
-      <body className="bg-slate-50 text-slate-900 antialiased flex flex-col overflow-hidden" style={{ height: "100dvh" }}>
-        <MapProvider>
-          <NotificationEngine />
-          <div className="flex-1 overflow-hidden relative">{children}</div>
-          <BottomNav />
-        </MapProvider>
-      </body>
+    <html lang="en">
+      <head>
+        {/* Content Security Policy to allow Google Maps to load without ERR_BLOCKED_BY_CLIENT */}
+        <meta 
+          httpEquiv="Content-Security-Policy" 
+          content="default-src 'self' * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://maps.google.com; img-src 'self' data: blob: https://*.gstatic.com https://*.googleapis.com https://*.google.com https://*.ggpht.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.google.com; worker-src 'self' blob:;" 
+        />
+      </head>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
