@@ -76,7 +76,8 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
   };
 
   try {
-    const res = await fetch(`http://localhost:8000/api/v1${url}`, { 
+    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+    const res = await fetch(`${baseUrl}/api/v1${url}`, { 
       ...options, 
       headers,
       signal: controller.signal 

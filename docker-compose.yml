@@ -8,9 +8,11 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DATABASE_URL=sqlite:////app/backend/traffic_brain.db
+      - DATABASE_URL=sqlite:////app/data/traffic_brain.db
+    env_file:
+      - .env
     volumes:
-      - traffic_data:/app/backend
+      - traffic_data:/app/data
     depends_on:
       - redis
 
@@ -21,7 +23,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+    env_file:
+      - .env.local
     depends_on:
       - backend
 

@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt ./backend_requirements.txt
+COPY traffic_engine/requirements.txt ./traffic_engine_requirements.txt
+RUN pip install --no-cache-dir -r backend_requirements.txt -r traffic_engine_requirements.txt
 
 # Copy backend code and ML engine
 COPY backend/ ./backend/
@@ -22,4 +23,4 @@ WORKDIR /app/backend
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
