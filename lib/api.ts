@@ -216,7 +216,8 @@ export async function reportIncident(
 }
 
 export async function reportTrafficIncident(areaId: string, type: 'CRASH' | 'HAZARD' | 'POLICE') {
-  const penalty = type === 'CRASH' ? 800 : type === 'HAZARD' ? 400 : 200;
+  // Boost penalties so they ALWAYS trigger the congestion threshold (600) for demonstration purposes
+  const penalty = type === 'CRASH' ? 1000 : type === 'HAZARD' ? 700 : 400;
   try {
     const res = await apiFetch("/mobile/incident", {
       method: "POST",

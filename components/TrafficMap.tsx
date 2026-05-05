@@ -36,6 +36,9 @@ interface TrafficMapProps {
     backend_online: boolean;
   };
   dynamicPath?: google.maps.LatLngLiteral[];
+  altPath?: google.maps.LatLngLiteral[];
+  pathColor?: string;
+  altPathColor?: string;
 }
 
 function TrafficLayerComponent() {
@@ -49,16 +52,17 @@ function TrafficLayerComponent() {
   return null;
 }
 
-function DynamicRouteComponent({ path }: { path: google.maps.LatLngLiteral[] }) {
+function DynamicRouteComponent({ path, color, zIndex }: { path: google.maps.LatLngLiteral[], color: string, zIndex?: number }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !window.google || !path || path.length === 0) return;
     
     const polyline = new window.google.maps.Polyline({
       path,
-      strokeColor: "#2563eb",
+      strokeColor: color,
       strokeOpacity: 1.0,
       strokeWeight: 7,
+      zIndex: zIndex || 1,
       map,
     });
 
@@ -71,7 +75,7 @@ function DynamicRouteComponent({ path }: { path: google.maps.LatLngLiteral[] }) 
   return null;
 }
 
-export default function TrafficMap({ sensorData, dynamicPath }: TrafficMapProps) {
+export default function TrafficMap({ sensorData, dynamicPath, altPath, pathColor = "#2563eb", altPathColor = "#94a3b8" }: TrafficMapProps) {
   const [userPos, setUserPos] = useState<google.maps.LatLngLiteral | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
 
@@ -109,9 +113,13 @@ export default function TrafficMap({ sensorData, dynamicPath }: TrafficMapProps)
       >
         <TrafficLayerComponent />
         
+        {altPath && altPath.length > 0 && (
+          <DynamicRouteComponent path={altPath} color={altPathColor} zIndex={1} />
+        )}
+
         {dynamicPath && dynamicPath.length > 0 && (
           <>
-            <DynamicRouteComponent path={dynamicPath} />
+            <DynamicRouteComponent path={dynamicPath} color={pathColor} zIndex={2} />
             <Marker position={dynamicPath[0]} label="S" />
             <Marker position={dynamicPath[dynamicPath.length - 1]} label="E" />
           </>

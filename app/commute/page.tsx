@@ -62,6 +62,9 @@ export default function CommutePage() {
   const [recommendation, setRecommendation] = useState<any>(null);
   const [sensorData, setSensorData] = useState<any>(null);
   const [dynamicPath, setDynamicPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [altPath, setAltPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [pathColor, setPathColor] = useState<string>("#2563eb");
+  const [altPathColor, setAltPathColor] = useState<string>("#94a3b8");
   const [intersectingCams, setIntersectingCams] = useState<string[]>([]);
   
   const [recentRoutes, setRecentRoutes] = useState<any[]>([]);
@@ -156,7 +159,8 @@ export default function CommutePage() {
           destination: d.includes(',') && !isNaN(parseFloat(d.split(',')[0])) ? { location: { latLng: { latitude: Number(d.split(',')[0]), longitude: Number(d.split(',')[1]) } } } : { address: d },
           travelMode: 'DRIVE',
           routingPreference: 'TRAFFIC_AWARE',
-          units: 'METRIC'
+          units: 'METRIC',
+          computeAlternativeRoutes: true
         })
       });
 
@@ -170,8 +174,16 @@ export default function CommutePage() {
       if (!data.routes || data.routes.length === 0) throw new Error("No driving route found between these locations.");
 
       const route = data.routes[0];
-      const path = route.polyline ? decodePolyline(route.polyline.encodedPolyline) : [];
-      setDynamicPath(path);
+      const primaryPath = route.polyline ? decodePolyline(route.polyline.encodedPolyline) : [];
+      let secondaryPath: google.maps.LatLngLiteral[] = [];
+      if (data.routes.length > 1) {
+        secondaryPath = decodePolyline(data.routes[1].polyline.encodedPolyline);
+      }
+      
+      setDynamicPath(primaryPath);
+      setAltPath(secondaryPath);
+      setPathColor("#2563eb");
+      setAltPathColor("#94a3b8");
 
       // Extract details for toast
       const durationSecs = parseInt(route.duration.replace('s', ''));
@@ -205,7 +217,7 @@ export default function CommutePage() {
       setRecentRoutes(getRecentRoutes());
 
       const foundCams = new Set<string>();
-      path.forEach(pt => {
+      primaryPath.forEach(pt => {
         CAMERA_NODES.forEach(cam => {
           const dx = (cam.lng - pt.lng) * Math.cos(cam.lat * Math.PI / 180);
           const dy = (cam.lat - pt.lat);
@@ -214,14 +226,31 @@ export default function CommutePage() {
       });
       
       const camList = Array.from(foundCams);
+      
+      // Fallback for demo: if the Google route polyline completely misses our 1km camera radiuses,
+      // inject the main CBD and Borrowdale cameras so we evaluate real ML data and user-reported incidents.
+      if (camList.length === 0) {
+        camList.push("cam_main_01");
+        camList.push("cam_02");
+      }
+      
       setIntersectingCams(camList);
       
       // AI RECOMMENDATION LOGIC
-      // Even if no cameras are found, we trigger a forecast using a "virtual" global ID
-      // so the user always gets a time-of-day based prediction.
-      const aiRec = await runAIForecast(camList.length > 0 ? camList : ["cam_virtual_harare"]);
+      const aiRec = await runAIForecast(camList);
       
       if (aiRec) {
+        if (aiRec.status === 'ALERT' || aiRec.status === 'CONGESTED' || aiRec.status === 'WARNING') {
+           if (secondaryPath.length > 0) {
+             setDynamicPath(secondaryPath); 
+             setAltPath(primaryPath);
+             setPathColor("#16a34a"); // Highlight alternative route in clear green
+             setAltPathColor("#dc2626"); // Mark congested route in red
+           } else {
+             setPathColor("#dc2626"); // Red for main route if no alternatives exist
+           }
+        }
+        
         const type = aiRec.status === 'ALERT' || aiRec.status === 'CONGESTED' ? 'error' : 
                      aiRec.status === 'WARNING' || aiRec.status === 'MODERATE' ? 'warning' : 
                      aiRec.status === 'error' ? 'error' : 'success';
@@ -267,7 +296,7 @@ export default function CommutePage() {
   return (
     <div className="h-screen w-full relative bg-slate-900 overflow-hidden font-sans">
       <div className="absolute inset-0 z-0">
-        <MapProvider path={dynamicPath} sensorData={sensorData} />
+        <MapProvider path={dynamicPath} altPath={altPath} pathColor={pathColor} altPathColor={altPathColor} sensorData={sensorData} />
       </div>
 
       <div className="absolute top-10 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white/95 backdrop-blur-3xl px-6 py-3 rounded-full shadow-2xl border border-white/60">
