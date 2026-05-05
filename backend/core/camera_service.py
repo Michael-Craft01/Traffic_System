@@ -41,7 +41,8 @@ class CameraService:
             detector_path,
             "--ip", ip,
             "--port", port,
-            "--camera_id", camera_id
+            "--camera_id", camera_id,
+            "--url", "http://127.0.0.1:8000/api/v1/ingest/camera"
         ]
 
         try:

@@ -51,10 +51,21 @@ def send_data_to_backend(count, status):
         "longitude": -74.0060
     }
     
+    # We use the demo-token defined in security.py for local development
+    headers = {
+        "Authorization": "Bearer demo-token"
+    }
+    
     try:
         # We use a quick timeout so the video feed doesn't lag if the server is slow
-        response = requests.post(BACKEND_URL, json=payload, timeout=0.5)
-        # Optionally log success if debugging: print(f"API Success: {response.status_code}")
+        response = requests.post(BACKEND_URL, json=payload, headers=headers, timeout=0.5)
+        
+        if response.status_code == 200:
+            # Uncomment for verbose logging: print(f"✅ API Success: {response.status_code}")
+            pass
+        else:
+            print(f"⚠️ Backend rejected data: {response.status_code} - {response.text}")
+            
     except requests.exceptions.RequestException as e:
         print(f"❌ Backend API Error: {e}")
 

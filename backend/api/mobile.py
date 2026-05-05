@@ -9,6 +9,14 @@ logger = get_logger("mobile_api")
 
 router = APIRouter()
 
+class IncidentReport(BaseModel):
+    area_id: str
+    penalty: int
+
+@router.post("/incident")
+async def report_incident(report: IncidentReport):
+    redis_manager.report_incident(report.area_id, report.penalty)
+    return {"status": "success", "message": f"Incident reported at {report.area_id}"}
 
 @router.get("/state")
 async def get_live_traffic_state():

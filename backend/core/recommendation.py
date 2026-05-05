@@ -1,6 +1,7 @@
 from core.ml_integration import ml_brain, get_recent_history
 from core.config import settings
 from core.logger import get_logger
+from core.redis import redis_manager
 
 logger = get_logger("recommendation")
 
@@ -39,7 +40,14 @@ class RecommendationEngine:
         planned_volume = predictions[planned_departure_index]
         threshold = settings.CONGESTION_THRESHOLD_VOLUME
         
-        if planned_volume < threshold:
+        # --- LOAD BALANCING LOGIC ---
+        # 1 user assigned = 5 vehicles of impact
+        virtual_load = redis_manager.get_route_load(route_id, planned_departure_index) * 5
+        incident_penalty = redis_manager.get_incident_penalty(route_id)
+        effective_volume = planned_volume + virtual_load + incident_penalty
+        
+        if effective_volume < threshold:
+            redis_manager.increment_route_load(route_id, planned_departure_index)
             return {
                 "status": "CLEAR",
                 "message": "Your planned departure time looks clear.",
@@ -47,10 +55,11 @@ class RecommendationEngine:
                 "suggested_shift_mins": 0
             }
             
-        # 4. Route IS congested. Find closest alternative departure time (earlier OR later).
+        # 4. Route IS congested (naturally or due to high app usage). Find closest alternative departure time.
         clear_windows = []
         for i, p_vol in enumerate(predictions):
-            if p_vol < threshold:
+            v_load = redis_manager.get_route_load(route_id, i) * 5
+            if (p_vol + v_load + incident_penalty) < threshold:
                 clear_windows.append(i)
 
         if clear_windows:
@@ -58,24 +67,36 @@ class RecommendationEngine:
             # Find closest window to planned index
             closest_idx = sorted(clear_windows, key=lambda x: abs(x - planned_departure_index))[0]
             
+            redis_manager.increment_route_load(route_id, closest_idx)
+            
             shift_intervals = closest_idx - planned_departure_index
             shift_mins = shift_intervals * 5
             
             direction = "later" if shift_mins > 0 else "early"
             
-            logger.info(f"Issuing severity ALERT for route {route_id}. Shift: {shift_mins}m")
+            if planned_volume < threshold:
+               msg = f"ROUTE LOAD BALANCING: High app user volume. Leave {abs(shift_mins)} mins {direction} to stagger departure."
+               status = "WARNING"
+               orch_mode = "Staggered"
+            else:
+               msg = f"HEAVY TRAFFIC PREDICTED. Leave {abs(shift_mins)} mins {direction} to save time."
+               status = "ALERT"
+               orch_mode = "Balanced"
+               
+            logger.info(f"Issuing severity {status} for route {route_id}. Shift: {shift_mins}m")
             return {
-                "status": "ALERT",
-                "message": f"HEAVY TRAFFIC PREDICTED. Leave {abs(shift_mins)} mins {direction} to save time.",
+                "status": status,
+                "message": msg,
                 "predicted_volume": planned_volume,
                 "suggested_shift_mins": shift_mins,
-                "orchestration_mode": "Balanced"
+                "orchestration_mode": orch_mode
             }
                 
         # If we get here, the entire 30 minute window is jammed
+        is_incident = incident_penalty > 0
         return {
-            "status": "WARNING",
-            "message": "Heavy traffic for the entire 30-min window. Expect delays.",
+            "status": "ALERT" if is_incident else "WARNING",
+            "message": "[USER REPORTED INCIDENT AHEAD] Severe block. Avoid route." if is_incident else "Heavy traffic for the entire 30-min window. Expect delays.",
             "predicted_volume": planned_volume,
             "suggested_shift_mins": 0
         }

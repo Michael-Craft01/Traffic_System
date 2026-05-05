@@ -17,9 +17,9 @@ async def lifespan(app: FastAPI):
     # Startup Logic
     logger.info("Initializing Traffic System Brain...")
     init_db()
-    # Auto-start the hardcoded AI Node from .env
-    from core.camera_service import camera_service
-    camera_service.auto_start()
+    # Removed auto-start: The backend should only receive data, not launch the edge AI nodes.
+    # from core.camera_service import camera_service
+    # camera_service.auto_start()
     yield
     # Shutdown Logic
     logger.info("Shutting down Traffic System...")

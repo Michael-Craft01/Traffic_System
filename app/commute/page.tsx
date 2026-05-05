@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { 
   MapPin, 
   Search, 
@@ -24,9 +25,11 @@ import MapProvider from '@/components/MapProvider';
 import PlaceAutocomplete from '@/components/PlaceAutocomplete';
 import { 
   getRecentRoutes, 
-  addRecentRoute 
+  addRecentRoute,
+  getCommuterScore,
+  addCommuterPoints
 } from '@/lib/storage';
-import { fetchRecommendation, fetchTrafficState, logJourney, fetchSuggestions } from '@/lib/api';
+import { fetchRecommendation, fetchTrafficState, logJourney, fetchSuggestions, reportTrafficIncident } from '@/lib/api';
 import { CAMERA_NODES } from '@/components/TrafficMap';
 
 // Manual Polyline Decoder
@@ -65,17 +68,14 @@ export default function CommutePage() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [departureTime, setDepartureTime] = useState(new Date().toTimeString().slice(0,5));
-  const [toast, setToast] = useState<{ 
-    message: string, 
-    duration: string, 
-    distance: string,
-    insight?: string,
-    status?: string
-  } | null>(null);
-  const toastTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const notifiedAlerts = React.useRef<Set<string>>(new Set());
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [incidentArea, setIncidentArea] = useState(CAMERA_NODES[0]?.id || "cam_main_01");
+  const [commuterScore, setCommuterScore] = useState(0);
 
   useEffect(() => {
     setRecentRoutes(getRecentRoutes());
+    setCommuterScore(getCommuterScore());
     fetchSuggestions().then(s => {
       // COORDINATE-BASED FALLBACKS: Guarantees a route is found even if strings are vague
       if (!s || s.length === 0) {
@@ -87,16 +87,44 @@ export default function CommutePage() {
         setSuggestions(s);
       }
     });
-    fetchTrafficState().then(setSensorData);
+
+    const pollTraffic = async () => {
+      const state = await fetchTrafficState();
+      setSensorData(state);
+      
+      if (state.backend_online && state.cameras) {
+        Object.entries(state.cameras).forEach(([camId, data]) => {
+          if (data.status === 'CONGESTED' || data.status === 'ALERT') {
+            if (!notifiedAlerts.current.has(camId)) {
+              const camNode = CAMERA_NODES.find(c => c.id === camId);
+              const label = camNode ? camNode.area : camId;
+              toast.error(`⚠️ Proactive Traffic Alert`, {
+                description: `Severe congestion detected at ${label}. Expect delays if heading that way.`,
+                duration: 10000,
+              });
+              notifiedAlerts.current.add(camId);
+            }
+          } else {
+            notifiedAlerts.current.delete(camId);
+          }
+        });
+      }
+    };
+
+    pollTraffic();
+    const interval = setInterval(pollTraffic, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const runAIForecast = async (camIds: string[]) => {
     try {
       const allPredictions = await Promise.all(camIds.map(camId => fetchRecommendation(camId, 0)));
       const worstRec = allPredictions.reduce((prev, curr) => (curr.predicted_volume || 0) >= (prev.predicted_volume || 0) ? curr : prev);
+      const worstVol = worstRec.predicted_volume || 0;
       const timeline = [
-        worstRec.predicted_volume * 0.4, worstRec.predicted_volume * 0.7, worstRec.predicted_volume,
-        worstRec.predicted_volume * 0.8, worstRec.predicted_volume * 0.5, worstRec.predicted_volume * 0.3
+        worstVol * 0.4, worstVol * 0.7, worstVol,
+        worstVol * 0.8, worstVol * 0.5, worstVol * 0.3
       ];
       setRecommendation({ ...worstRec, timeline });
       return worstRec;
@@ -153,14 +181,9 @@ export default function CommutePage() {
         : `${Math.floor(durationSecs / 60)} mins`;
       const distStr = `${(distanceMeters / 1000).toFixed(1)} km`;
 
-      setToast({
-        message: "Route Optimized",
-        duration: timeStr,
-        distance: distStr
+      toast.success("Route Optimized", {
+        description: `Time: ${timeStr} | Distance: ${distStr}`
       });
-      
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => setToast(null), 8000);
 
       const leg = route.legs[0];
       const journey = {
@@ -199,14 +222,40 @@ export default function CommutePage() {
       const aiRec = await runAIForecast(camList.length > 0 ? camList : ["cam_virtual_harare"]);
       
       if (aiRec) {
-        setToast(prev => prev ? {
-          ...prev,
-          insight: aiRec.message,
-          status: aiRec.status
-        } : null);
-        
-        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => setToast(null), 8000);
+        const type = aiRec.status === 'ALERT' || aiRec.status === 'CONGESTED' ? 'error' : 
+                     aiRec.status === 'WARNING' || aiRec.status === 'MODERATE' ? 'warning' : 
+                     aiRec.status === 'error' ? 'error' : 'success';
+                     
+        if ((aiRec.suggested_shift_mins || 0) > 0) {
+           toast[type as "error" | "warning"](`AI Insight: ${aiRec.status || 'WARNING'}`, {
+             description: aiRec.message,
+             duration: 10000,
+             action: {
+               label: 'Accept Slot (+50 pts)',
+               onClick: () => {
+                 const newScore = addCommuterPoints(50);
+                 setCommuterScore(newScore);
+                 toast.success("Departure scheduled! You earned 50 Eco-Points.");
+               }
+             }
+           });
+        } else if (aiRec.status === 'CLEAR') {
+           toast.success(`AI Insight: CLEAR`, {
+             description: aiRec.message,
+             action: {
+               label: 'Drive Now (+10 pts)',
+               onClick: () => {
+                 const newScore = addCommuterPoints(10);
+                 setCommuterScore(newScore);
+                 toast.success("Eco-Points awarded for off-peak driving!");
+               }
+             }
+           });
+        } else {
+          toast[type as "error" | "warning" | "success"](`AI Insight: ${aiRec.status || 'CLEAR'}`, {
+            description: aiRec.message || 'Your planned route looks optimal for current conditions.'
+          });
+        }
       }
 
     } catch (e: any) {
@@ -221,59 +270,17 @@ export default function CommutePage() {
         <MapProvider path={dynamicPath} sensorData={sensorData} />
       </div>
 
-      {/* PREMIUM ROUTE TOAST */}
-      {toast && (
-        <div className="absolute top-8 right-8 z-[100] animate-in fade-in slide-in-from-right-12 duration-700 flex flex-col items-end gap-4 max-w-[450px] pointer-events-none">
-           {/* Metrics Row */}
-           <div className="flex gap-4">
-              <div className="bg-white/95 backdrop-blur-2xl border border-white/60 p-5 rounded-[2.5rem] shadow-2xl flex items-center gap-5 pointer-events-auto">
-                 <div className="bg-blue-600 p-3.5 rounded-2xl text-white shadow-xl shadow-blue-600/30"><Clock size={28} strokeWidth={3} /></div>
-                 <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Time</p>
-                    <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter">{toast.duration}</p>
-                 </div>
-              </div>
-              <div className="bg-white/95 backdrop-blur-2xl border border-white/60 p-5 rounded-[2.5rem] shadow-2xl flex items-center gap-5 pointer-events-auto">
-                 <div className="bg-slate-900 p-3.5 rounded-2xl text-white shadow-xl shadow-black/20"><Navigation size={28} strokeWidth={3} /></div>
-                 <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Distance</p>
-                    <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter">{toast.distance}</p>
-                 </div>
-              </div>
-           </div>
-
-           {/* AI Insight Card */}
-           {(toast.status || toast.insight) && (
-              <div className={`bg-white/95 backdrop-blur-3xl border-4 p-8 rounded-[3.5rem] shadow-[0_40px_80px_rgba(0,0,0,0.25)] animate-in slide-in-from-bottom-6 duration-700 pointer-events-auto flex flex-col gap-6 ${
-                toast.status === 'ALERT' || toast.status === 'CONGESTED' ? 'border-red-500' : 
-                toast.status === 'WARNING' || toast.status === 'MODERATE' ? 'border-amber-500' : 
-                toast.status === 'error' ? 'border-slate-800' : 'border-emerald-500'
-              }`}>
-                 <div className="flex items-center justify-between gap-12">
-                    <div className="flex items-center gap-4">
-                       <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/30"><Sparkles size={20} /></div>
-                       <div>
-                          <p className="text-[11px] font-black text-slate-900 uppercase tracking-widest leading-none mb-1">AI Intelligence</p>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Real-time Forecast</p>
-                       </div>
-                    </div>
-                    <div className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg ${
-                      toast.status === 'ALERT' || toast.status === 'CONGESTED' ? 'bg-red-500 text-white shadow-red-500/30' : 
-                      toast.status === 'WARNING' || toast.status === 'MODERATE' ? 'bg-amber-500 text-white shadow-amber-500/30' : 
-                      toast.status === 'error' ? 'bg-slate-800 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
-                    }`}>
-                      {toast.status === 'error' ? 'AI OFFLINE' : toast.status || 'CLEAR'}
-                    </div>
-                 </div>
-                 <div className="bg-slate-50/80 p-5 rounded-[2rem] border border-slate-100">
-                    <p className="text-[15px] font-bold text-slate-800 leading-snug">
-                       {toast.insight || 'Your planned route looks optimal for current conditions. No shift suggested.'}
-                    </p>
-                 </div>
-              </div>
-           )}
+      <div className="absolute top-10 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white/95 backdrop-blur-3xl px-6 py-3 rounded-full shadow-2xl border border-white/60">
+        <Star size={20} className={commuterScore >= 300 ? "text-yellow-500 fill-yellow-500" : commuterScore >= 100 ? "text-slate-400 fill-slate-400" : "text-amber-700 fill-amber-700"} />
+        <div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none mb-1">Commuter Rank</p>
+          <p className="text-sm font-black text-slate-900 leading-none">
+            {commuterScore >= 300 ? 'Gold' : commuterScore >= 100 ? 'Silver' : 'Bronze'} ({commuterScore} pts)
+          </p>
         </div>
-      )}
+      </div>
+
+      {/* PREMIUM ROUTE TOAST REMOVED IN FAVOR OF SONNER */}
 
       <div className="absolute top-8 left-8 w-[420px] z-50 flex flex-col gap-6 pointer-events-none">
         <div className="bg-white/95 backdrop-blur-3xl rounded-[3rem] shadow-[0_40px_80px_rgba(0,0,0,0.3)] border border-white/60 p-10 pointer-events-auto animate-in slide-in-from-left-16 duration-700">
@@ -359,40 +366,7 @@ export default function CommutePage() {
 
         </div>
 
-        {recommendation && (
-           <div className={`rounded-[3.5rem] p-10 shadow-2xl pointer-events-auto animate-in slide-in-from-left-16 duration-500 relative overflow-hidden border-4 border-white/30 ${
-              recommendation.status === 'ALERT' || recommendation.status === 'CONGESTED' ? 'bg-red-600 text-white' : 
-              recommendation.status === 'WARNING' || recommendation.status === 'MODERATE' ? 'bg-amber-500 text-white' : 
-              recommendation.status === 'error' ? 'bg-slate-800 text-slate-300' : 'bg-emerald-500 text-white'
-           }`}>
-              <div className="flex justify-between items-start mb-10 relative z-10">
-                 <div className="bg-white/25 p-5 rounded-[1.5rem] backdrop-blur-md shadow-inner">
-                    {recommendation.status === 'ALERT' ? <AlertTriangle size={36} /> : 
-                     recommendation.status === 'WARNING' ? <Clock size={36} /> : <ShieldCheck size={36} />}
-                 </div>
-                 <button onClick={() => setRecommendation(null)} className="p-3 bg-black/10 rounded-full"><X size={24}/></button>
-              </div>
-              <h2 className="text-5xl font-black mb-4 tracking-tighter uppercase leading-none relative z-10">
-                 {recommendation.status === 'ALERT' || recommendation.status === 'CONGESTED' ? 'Traffic Alert' : 
-                  recommendation.status === 'error' ? 'AI Offline' : 'Route Clear'}
-              </h2>
-              <p className="text-base font-bold opacity-90 leading-snug mb-10 max-w-[300px] relative z-10">{recommendation.message}</p>
-              <div className="mb-10 relative z-10">
-                 <p className="text-[10px] font-black uppercase opacity-60 tracking-[0.2em] mb-4">Predicted Intensity</p>
-                 <div className="flex items-end gap-2.5 h-24 px-2">
-                    {recommendation.timeline?.map((v: number, i: number) => (
-                       <div key={i} className={`flex-1 rounded-t-2xl transition-all duration-1000 ${v > 60 ? 'bg-white' : 'bg-white/30'}`} style={{ height: `${Math.max(v, 10)}%` }} />
-                    ))}
-                 </div>
-              </div>
-              {recommendation.suggested_shift_mins !== 0 && (
-                 <div className="bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl relative z-10 flex items-center justify-between group">
-                    <p className="font-black text-xl leading-none">In {Math.abs(recommendation.suggested_shift_mins)} mins</p>
-                    <div className="bg-slate-900 text-white p-4 rounded-2xl group-hover:translate-x-2 transition-transform"><ArrowRight size={24} /></div>
-                 </div>
-              )}
-           </div>
-        )}
+
       </div>
 
       {/* RE-DESIGNED AI SUGGESTIONS WITH COORDINATE GUARANTEE */}
@@ -422,10 +396,79 @@ export default function CommutePage() {
       )}
 
       <div className="absolute top-10 right-10 flex flex-col gap-5 z-50">
+         <button onClick={() => setShowIncidentModal(true)} className="w-16 h-16 bg-red-500 text-white backdrop-blur-3xl rounded-[1.5rem] shadow-2xl flex items-center justify-center hover:bg-red-600 hover:scale-110 transition-all active:scale-90 relative group">
+           <AlertTriangle size={26} />
+           <span className="absolute right-full mr-4 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Report Incident</span>
+         </button>
          {[Layers, LocateFixed, MoreVertical].map((Icon, i) => (
             <button key={i} className="w-16 h-16 bg-white/95 backdrop-blur-3xl rounded-[1.5rem] shadow-2xl flex items-center justify-center text-slate-800 hover:text-blue-600 transition-all border border-white/60 active:scale-90"><Icon size={26} /></button>
          ))}
       </div>
+
+      {showIncidentModal && (
+        <div className="absolute inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-4">
+                <div className="bg-red-100 text-red-600 p-3 rounded-2xl">
+                  <AlertTriangle size={28} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">Report Incident</h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Community Alert</p>
+                </div>
+              </div>
+              <button onClick={() => setShowIncidentModal(false)} className="p-3 bg-slate-100 text-slate-400 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Location Area</label>
+                <select 
+                  value={incidentArea}
+                  onChange={(e) => setIncidentArea(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                >
+                  {CAMERA_NODES.map(node => (
+                    <option key={node.id} value={node.id}>{node.area} ({node.label})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { type: 'CRASH', icon: '🚗', label: 'Crash' },
+                  { type: 'HAZARD', icon: '🚧', label: 'Hazard' },
+                  { type: 'POLICE', icon: '🚓', label: 'Police' }
+                ].map(incident => (
+                  <button 
+                    key={incident.type}
+                    onClick={async () => {
+                      toast.loading("Broadcasting incident...", { id: "incident-toast" });
+                      const res = await reportTrafficIncident(incidentArea, incident.type as any);
+                      toast.dismiss("incident-toast");
+                      if (res.success) {
+                        const newScore = addCommuterPoints(20);
+                        setCommuterScore(newScore);
+                        toast.success("Incident broadcasted. You earned 20 Eco-Points!");
+                        setShowIncidentModal(false);
+                      } else {
+                        toast.error("Failed to broadcast incident.");
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 p-4 rounded-2xl transition-all active:scale-95"
+                  >
+                    <span className="text-3xl">{incident.icon}</span>
+                    <span className="text-xs font-bold text-slate-700">{incident.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx global>{`
         @keyframes float {

@@ -108,3 +108,18 @@ export function getLastNotified(routeId: string): number {
   const data = JSON.parse(raw);
   return data[routeId] || 0;
 }
+
+// --- Commuter Gamification ---
+
+export function getCommuterScore(): number {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem("traffic_commuter_score");
+  return raw ? parseInt(raw, 10) : 0;
+}
+
+export function addCommuterPoints(amount: number): number {
+  const current = getCommuterScore();
+  const updated = current + amount;
+  localStorage.setItem("traffic_commuter_score", updated.toString());
+  return updated;
+}

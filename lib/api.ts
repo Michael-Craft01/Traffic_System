@@ -6,7 +6,7 @@
  */
 
 // ── Shared types ──────────────────────────────────────────────────
-export type CongestionStatus = "CLEAR" | "MODERATE" | "CONGESTED" | "UNKNOWN";
+export type CongestionStatus = "CLEAR" | "MODERATE" | "CONGESTED" | "UNKNOWN" | "ALERT" | "WARNING";
 
 export interface CameraData {
   camera_id: string;
@@ -21,6 +21,7 @@ export interface TrafficState {
   vehicle_count: number;
   congestion_status: CongestionStatus;
   cameras: Record<string, CameraData>;
+  predictions?: Record<string, number[]>;
   backend_online: boolean;
   error: string | null;
 }
@@ -33,7 +34,7 @@ export interface ForecastResult {
 }
 
 export interface RecommendationResult {
-  status: "CLEAR" | "ALERT" | "WARNING" | "error" | "unknown";
+  status: "CLEAR" | "ALERT" | "WARNING" | "error" | "unknown" | "CONGESTED" | "MODERATE";
   message: string;
   suggested_shift_mins?: number;
   predicted_volume?: number;
@@ -107,6 +108,7 @@ export async function fetchTrafficState(): Promise<TrafficState> {
       vehicle_count:     json.live_nodes        ?? 0,
       congestion_status: "UNKNOWN",
       cameras:           data,
+      predictions:       json.predictions       || {},
       backend_online:    true,
       error:             null,
     };
@@ -205,6 +207,21 @@ export async function reportIncident(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    });
+    if (!res.ok) return { success: false, error: `Server returned ${res.status}` };
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function reportTrafficIncident(areaId: string, type: 'CRASH' | 'HAZARD' | 'POLICE') {
+  const penalty = type === 'CRASH' ? 800 : type === 'HAZARD' ? 400 : 200;
+  try {
+    const res = await apiFetch("/mobile/incident", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ area_id: areaId, penalty }),
     });
     if (!res.ok) return { success: false, error: `Server returned ${res.status}` };
     return { success: true };
