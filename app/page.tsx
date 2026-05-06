@@ -19,256 +19,227 @@ import {
   Clock,
   Radio,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  TrendingUp as TrendIcon,
+  Wind,
+  Droplets,
+  Settings,
+  Zap
 } from "lucide-react";
 import Link from "next/link";
+import ForecastChart from "@/components/ForecastChart";
 
 export default function DashboardPage() {
   const [liveState, setLiveState] = useState<TrafficState>({
-    vehicle_count: 0,
-    congestion_status: "UNKNOWN",
-    cameras: {},
+    total_vehicles: 0,
+    average_speed: 0,
+    congestion_level: "LOW",
     backend_online: false,
-    error: null,
+    cameras: {},
+    predictions: {}
   });
-  
+
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchState = useCallback(async () => {
-    const data = await fetchTrafficState();
-    setLiveState(data);
-    setLoading(false);
-  }, []);
-
-  const fetchLiveIncidents = useCallback(async () => {
-    const data = await fetchIncidents();
-    setIncidents(data);
+  const refreshData = useCallback(async () => {
+    try {
+      const [state, incs] = await Promise.all([
+        fetchTrafficState(),
+        fetchIncidents()
+      ]);
+      setLiveState(state);
+      setIncidents(incs);
+    } catch (error) {
+      console.error("Dashboard refresh failed:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    fetchState();
-    fetchLiveIncidents();
-    const interval = setInterval(() => {
-      fetchState();
-      fetchLiveIncidents();
-    }, 5000);
+    refreshData();
+    const interval = setInterval(refreshData, 10000);
     return () => clearInterval(interval);
-  }, [fetchState, fetchLiveIncidents]);
+  }, [refreshData]);
 
-  const { vehicle_count, congestion_status, backend_online, error, cameras } = liveState;
-
-  // ── Feature 1: Computed City Score ──
-  const activeCameras = Object.values(cameras);
-  const totalVehicles = activeCameras.reduce((acc, c) => acc + c.total_flow, 0) || vehicle_count;
-  // Let's assume a city capacity of roughly 1200 actively tracked in our small demo grid
+  const { total_vehicles: totalVehicles, average_speed: avgSpeed, congestion_level: congestion, cameras, backend_online } = liveState;
+  
+  // Dynamic Score Calculation
   const cityScore = Math.min(100, Math.round((totalVehicles / 1200) * 100));
   const cityHealthStr = cityScore > 75 ? "Severe Delays" : cityScore > 40 ? "Moderate Flow" : "Flowing Smoothly";
 
+  // Eco Impact Stats
+  const ecoStats = {
+    co2Saved: (totalVehicles * 0.12).toFixed(1),
+    fuelEfficiency: "+18%",
+    noiseLevel: cityScore > 60 ? "Elevated" : "Ambient"
+  };
+
+  const primaryCamId = "cam_main_01";
+  const predictionData = liveState.predictions?.[primaryCamId] || [120, 150, 300, 450, 400, 320];
+
   return (
-    <div className="relative w-full h-full flex flex-col bg-zinc-100 overflow-hidden">
+    <div className="relative w-full h-full flex flex-col bg-zinc-50 overflow-hidden selection:bg-black/10">
       
-      {/* ── Header Overlay (Glass) ── */}
-      <div className="absolute top-0 left-0 right-0 z-10 pointer-events-none p-4">
-        <div className="flex justify-between items-start">
-          <div className="pointer-events-auto bg-white/70 backdrop-blur-xl border border-white/60 shadow-lg shadow-black/5 rounded-2xl p-3 inline-block">
-            <h1 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5 flex items-center gap-1">
-              <Radio size={12} className="text-black" /> Local Monitoring
-            </h1>
-            <p className="text-sm font-black text-black">
-              Traffic Brain System
-            </p>
-          </div>
-
-          <div className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/50 shadow-lg shadow-black/5 bg-white/70 backdrop-blur-xl">
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                backend_online ? "bg-black" : "bg-zinc-400"
-              }`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                backend_online ? "bg-black" : "bg-zinc-500"
-              }`}></span>
-            </span>
-            <span className="text-[10px] font-bold tracking-wider uppercase text-black">
-              {backend_online ? "Live DBS" : "Offline"}
-            </span>
-          </div>
-        </div>
-        
-        {error && !backend_online && (
-          <div className="mt-3 pointer-events-auto flex items-start gap-2 bg-white/80 backdrop-blur-xl border border-white/60 rounded-xl p-3 max-w-[250px] shadow-lg shadow-black/5 transition-all duration-300">
-            <AlertCircle size={16} className="text-black mt-0.5 shrink-0" />
-            <p className="text-[10px] font-bold text-zinc-600 leading-tight">
-              {error} - using fallback ML models.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* ── Map Layer (40% height on most screens) ── */}
-      <div className="flex-none h-[40vh] w-full relative z-0">
-         <MapProvider sensorData={liveState} />
-         {/* Gradient fade to seamlessly blend map with bottom sheet */}
-         <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/80 to-transparent z-[1000] pointer-events-none" />
-      </div>
-
-      {/* ── Bottom Command Center (Scrollable) ── */}
-      <div className="flex-1 overflow-y-auto relative z-10 bg-white/80 backdrop-blur-2xl border-t border-white/60 shadow-[0_-12px_40px_rgba(0,0,0,0.06)] rounded-t-3xl pb-24 shrink-0 pointer-events-auto">
-        <div className="sticky top-0 bg-white/40 backdrop-blur-md pt-3 pb-2 z-20">
-           <div className="w-12 h-1.5 bg-black/10 rounded-full mx-auto" />
-        </div>
-
-        {loading ? (
-           <div className="p-4 animate-pulse space-y-4">
-             <div className="h-20 bg-black/5 rounded-2xl"></div>
-             <div className="h-24 bg-black/5 rounded-2xl"></div>
-             <div className="h-32 bg-black/5 rounded-2xl"></div>
-           </div>
-        ) : (
-          <div className="p-4 space-y-5">
-
-            {/* Quick Actions */}
-            <div className="grid grid-cols-2 gap-3">
-              <Link href="/commute" className="bg-black text-white rounded-2xl py-3.5 font-bold text-sm shadow-xl shadow-black/10 active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2">
-                <RouteIcon size={16} /> Plan Route
-              </Link>
-              <Link href="/incidents" className="bg-white/60 backdrop-blur-md text-black border border-black/10 rounded-2xl py-3.5 font-bold text-sm shadow-sm active:scale-[0.98] transition-all text-center flex items-center justify-center gap-2">
-                <AlertCircle size={16} /> Report Jam
-              </Link>
+      {/* ── Top Navigation / HUD ── */}
+      <header className="px-8 py-6 flex items-center justify-between bg-white border-b border-black/5 z-10 shrink-0">
+         <div className="flex items-center gap-4">
+            <div className="bg-black p-3 rounded-2xl text-white shadow-lg">
+               <Activity size={24} />
             </div>
+            <div>
+               <h1 className="text-xl font-black text-black tracking-tighter leading-none">Traffic Intelligence</h1>
+               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] mt-1.5 flex items-center gap-1.5">
+                 <div className={`w-1.5 h-1.5 rounded-full ${backend_online ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                 Node: {backend_online ? 'HRE_CENTER_01' : 'OFFLINE'}
+               </p>
+            </div>
+         </div>
+         <div className="flex items-center gap-6">
+            <div className="hidden md:flex flex-col items-end">
+               <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Active Sensors</span>
+               <span className="text-sm font-bold text-black">{Object.keys(cameras).length} Nodes</span>
+            </div>
+            <Link href="/admin" className="p-3 bg-zinc-100 text-zinc-400 hover:text-black hover:bg-zinc-200 rounded-2xl transition-all border border-black/5">
+               <Settings size={20} />
+            </Link>
+         </div>
+      </header>
 
-            {/* Feature 1: City Health Index */}
-            <section className="bg-white/70 backdrop-blur-xl border border-white/60 p-5 rounded-3xl shadow-lg shadow-black/5 flex items-center justify-between">
-               <div>
-                  <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-                    <Activity size={12} className="text-black" /> City Congestion
-                  </h3>
-                  <p className="text-xl font-black text-black">{cityHealthStr}</p>
-                  <p className="text-xs font-bold text-zinc-400 mt-0.5">Index Score: {cityScore}/100</p>
-               </div>
-               <div className="relative w-14 h-14 flex items-center justify-center">
-                 <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-zinc-100" />
-                    <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={`${(cityScore / 100) * 150} 150`} className={cityScore > 75 ? "text-black" : cityScore > 40 ? "text-zinc-500" : "text-zinc-300"} strokeLinecap="round" />
-                 </svg>
-                 <span className="absolute text-sm font-black text-black">{cityScore}%</span>
-               </div>
-            </section>
-
-            {/* Feature 3: AI Predictive Insights */}
-            <section className="bg-zinc-100/80 border border-black/5 p-4 rounded-3xl shadow-inner">
-               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 mb-2 pl-1">
-                 <Brain size={12} className="text-black" /> Traffic Brain AI Insight
-               </h3>
-               <div className="bg-white rounded-2xl p-4 shadow-sm border border-black/5 flex items-start gap-3">
-                 <div className="p-2 bg-black text-white rounded-xl shrink-0"><Brain size={16} /></div>
+      <div className="flex-1 flex overflow-hidden">
+        {/* ── Main Map View ── */}
+        <main className="flex-1 relative border-r border-black/5 bg-zinc-100">
+           <MapProvider sensorData={liveState} />
+           
+           {/* Floating Map HUD */}
+           <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end pointer-events-none">
+              <div className="bg-white/90 backdrop-blur-3xl p-6 rounded-[2.5rem] shadow-2xl border border-black/5 pointer-events-auto flex gap-10">
                  <div>
-                    <p className="text-sm font-bold text-black leading-tight">
-                      {cityScore > 70 
-                        ? "Congestion is rapidly rising across the CBD. Delay non-essential travel by 30 mins." 
-                        : cityScore > 40
-                        ? "Volumes are stable. Minor delays predicted near major junctions over the next 15m."
-                        : "Current flow is ideal. AI predicts smooth routes for the next 45 minutes."}
-                    </p>
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Live Count</p>
+                    <p className="text-2xl font-black text-black tabular-nums">{totalVehicles}</p>
                  </div>
-               </div>
-            </section>
-
-            {/* Feature 5: Weather & Road Traction */}
-            <section className="flex gap-3">
-               <div className="flex-1 bg-white/70 backdrop-blur-xl border border-white/60 p-4 rounded-3xl shadow-lg shadow-black/5 flex items-center gap-3">
-                 <div className="p-3 bg-zinc-100 text-black rounded-full border border-black/5"><Sun size={20} /></div>
+                 <div className="w-px bg-black/5" />
                  <div>
-                   <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Road State</p>
-                   <p className="text-sm font-black text-black">Dry / Clear</p>
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Avg Speed</p>
+                    <p className="text-2xl font-black text-black tabular-nums">{avgSpeed} <span className="text-sm font-bold text-zinc-300">km/h</span></p>
                  </div>
-               </div>
-               <div className="flex-1 bg-white/70 backdrop-blur-xl border border-white/60 p-4 rounded-3xl shadow-lg shadow-black/5 flex items-center gap-3">
-                 <div className="p-3 bg-zinc-100 text-black rounded-full border border-black/5 text-center leading-none">
-                    <span className="text-[11px] font-black">26°</span>
-                 </div>
-                 <div>
-                   <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">AI Delay Factor</p>
-                   <p className="text-sm font-black text-black">+0%</p>
-                 </div>
-               </div>
-            </section>
+              </div>
+              
+              <div className="flex flex-col gap-3 pointer-events-auto">
+                 <button className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center text-zinc-400 hover:text-black transition-all border border-black/5">
+                    <Layers size={20} />
+                 </button>
+                 <button className="w-14 h-14 bg-black text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-zinc-900 transition-all">
+                    <LocateFixed size={20} />
+                 </button>
+              </div>
+           </div>
+        </main>
 
-            {/* Feature 2: CCTV Preview Carousel */}
-            <section className="pt-2">
-               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 mb-3 pl-1">
-                 <Video size={12} className="text-black" /> Live Node Cameras
-               </h3>
-               <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
-                 {CAMERA_NODES.map(cam => {
-                   const cData = cameras[cam.id];
-                   const isLive = !!cData && backend_online;
-                   const status = cData?.status || cam.defaultStatus;
-                   return (
-                     <div key={cam.id} className="snap-start shrink-0 w-36 bg-black text-white rounded-3xl overflow-hidden shadow-xl shadow-black/20 p-1 relative border border-zinc-800">
-                        {/* Fake CCTV feed look */}
-                        <div className="h-20 w-full bg-zinc-900 rounded-2xl overflow-hidden relative border border-white/10">
-                           <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
-                             <div className={`w-1.5 h-1.5 rounded-full ${isLive ? "bg-red-500 animate-pulse" : "bg-zinc-600"}`} />
-                             <span className="text-[8px] font-mono font-bold text-white/70 tracking-widest">
-                               {isLive ? "REC" : "MEM"}
-                             </span>
-                           </div>
-                           {/* Decorative static interference lines */}
-                           <div className="absolute inset-0 bg-[repeating-linear-gradient(transparent,transparent_2px,rgba(255,255,255,0.03)_3px)] pointer-events-none" />
-                           <div className="absolute bottom-1 right-1 text-[7px] font-mono text-white/50">{new Date().toISOString().slice(11,19)}</div>
-                        </div>
-                        <div className="p-3">
-                           <p className="text-xs font-bold truncate">{cam.label}</p>
-                           <p className={`text-[10px] font-bold uppercase mt-1 flex items-center gap-1 ${
-                              status === 'CLEAR' ? 'text-zinc-400' :
-                              status === 'MODERATE' ? 'text-zinc-300' : 'text-white'
-                           }`}>
-                             {status === "CONGESTED" && <AlertCircle size={10} />}
-                             {status}
-                           </p>
-                        </div>
-                     </div>
-                   );
-                 })}
-               </div>
-            </section>
-
-            {/* Feature 4: Recent Incident Feed */}
-            <section className="pt-2 mb-4">
-               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 mb-3 pl-1">
-                 <ShieldAlert size={12} className="text-black" /> Crowd Reports
-               </h3>
-               {incidents.length === 0 ? (
-                 <div className="bg-white/50 backdrop-blur-md border border-white/60 p-6 rounded-3xl text-center shadow-sm">
-                   <CheckCircle2 size={24} className="mx-auto mb-2 text-zinc-400" strokeWidth={2}/>
-                   <p className="text-sm font-bold text-zinc-600">No active reports</p>
-                 </div>
-               ) : (
-                 <div className="space-y-3">
-                   {incidents.slice(0, 3).map(inc => (
-                     <div key={inc.id} className="bg-white/80 backdrop-blur-xl border border-white/60 p-4 rounded-3xl shadow-lg shadow-black/5 flex items-start gap-4">
-                        <div className={`p-3 rounded-2xl shrink-0 ${inc.severity === 'high' ? 'bg-black text-white' : 'bg-zinc-100 text-black border border-black/5'}`}>
-                          <CarFront size={18} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-sm text-black flex items-center justify-between">
-                            {inc.type} <span className="text-[9px] font-bold text-zinc-400 flex items-center gap-1 bg-black/5 px-2 rounded-md"><Clock size={8}/> LIVE</span>
-                          </p>
-                          <p className="text-xs font-bold text-zinc-500 mt-0.5 truncate">{inc.location}</p>
-                        </div>
-                     </div>
-                   ))}
-                 </div>
-               )}
-               <Link href="/incidents" className="block text-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-4 pb-2">
-                 View All Reports <ChevronRight size={10} className="inline mb-0.5" />
+        {/* ── Sidebar: Data & Insights ── */}
+        <aside className="w-[420px] bg-white overflow-y-auto shrink-0 p-8 space-y-10 scrollbar-hide">
+           
+           {loading ? (
+             <div className="space-y-6 animate-pulse">
+                <div className="h-40 bg-zinc-50 rounded-[3rem]"></div>
+                <div className="h-64 bg-zinc-50 rounded-[3rem]"></div>
+             </div>
+           ) : (
+             <>
+               {/* Quick Action */}
+               <Link href="/commute" className="w-full bg-black text-white py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl flex items-center justify-center gap-3 hover:bg-zinc-900 transition-all active:scale-[0.98]">
+                  <RouteIcon size={18} /> Plan Optimized Route
                </Link>
-            </section>
 
-          </div>
-        )}
+               {/* City Health Index */}
+               <section className="bg-zinc-50 border border-black/5 p-8 rounded-[3rem] flex items-center justify-between">
+                  <div>
+                     <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                       <Activity size={12} className="text-black" /> Network Health
+                     </h3>
+                     <p className="text-2xl font-black text-black leading-tight">{cityHealthStr}</p>
+                     <p className="text-xs font-bold text-zinc-400 mt-1">Load Factor: {cityScore}%</p>
+                  </div>
+                  <div className="relative w-16 h-16 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                       <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-black/5" />
+                       <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="6" fill="transparent" strokeDasharray={`${(cityScore / 100) * 176} 176`} className="text-black" strokeLinecap="round" />
+                    </svg>
+                    <span className="absolute text-[10px] font-black text-black">{cityScore}%</span>
+                  </div>
+               </section>
+
+               {/* AI Traffic Forecast */}
+               <section className="space-y-6">
+                  <div className="flex items-center justify-between px-2">
+                    <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                      <Brain size={12} className="text-black" /> AI 6H Forecast
+                    </h3>
+                    <span className="text-[8px] font-black bg-zinc-100 px-2 py-1 rounded-full text-zinc-500">PREDICTIVE</span>
+                  </div>
+                  <div className="h-28">
+                    <ForecastChart data={predictionData} />
+                  </div>
+                  <div className="bg-zinc-50 rounded-[2rem] p-6 border border-black/5 flex items-start gap-4">
+                    <div className="p-3 bg-white text-black rounded-xl shadow-sm"><Zap size={20} /></div>
+                    <p className="text-sm font-bold text-black leading-relaxed">
+                       {cityScore > 70 
+                         ? "Peak load detected. Rerouting algorithms active to balance arterial flow." 
+                         : "Flow stable. Minimal variation predicted across the secondary network."}
+                    </p>
+                  </div>
+               </section>
+
+               {/* Eco-Impact */}
+               <section className="grid grid-cols-3 gap-4">
+                  {[
+                    { label: 'CO2 Saved', val: `${ecoStats.co2Saved}kg`, icon: Wind },
+                    { label: 'Fuel Gain', val: ecoStats.fuelEfficiency, icon: Droplets },
+                    { label: 'Ambient', val: ecoStats.noiseLevel, icon: Radio }
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-zinc-50 p-5 rounded-[2rem] border border-black/5 flex flex-col items-center text-center">
+                       <stat.icon size={18} className="text-zinc-300 mb-3" />
+                       <p className="text-[8px] font-black text-zinc-400 uppercase tracking-tighter mb-1">{stat.label}</p>
+                       <p className="text-xs font-black text-black">{stat.val}</p>
+                    </div>
+                  ))}
+               </section>
+
+               {/* Recent Incident Feed */}
+               <section className="pt-2">
+                  <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-2 mb-6 px-2">
+                    <ShieldAlert size={12} className="text-black" /> Neural Broadcasts
+                  </h3>
+                  {incidents.length === 0 ? (
+                    <div className="bg-zinc-50 border border-black/5 p-8 rounded-[2.5rem] text-center">
+                       <p className="text-sm font-bold text-zinc-400 italic">Clear transmission</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {incidents.slice(0, 2).map(inc => (
+                        <div key={inc.id} className="bg-zinc-50 p-5 rounded-[2.5rem] border border-black/5 flex items-start gap-4 hover:bg-zinc-100 transition-all group">
+                           <div className="p-3 bg-white rounded-2xl shadow-sm text-zinc-300 group-hover:text-black transition-colors">
+                             <CarFront size={20} />
+                           </div>
+                           <div className="flex-1 min-w-0">
+                             <p className="font-black text-sm text-black truncate">{inc.type}</p>
+                             <p className="text-[10px] font-bold text-zinc-400 mt-1 uppercase tracking-widest truncate">{inc.location}</p>
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+               </section>
+             </>
+           )}
+        </aside>
       </div>
+
+      <style jsx global>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

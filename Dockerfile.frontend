@@ -1,23 +1,28 @@
-FROM node:20-slim AS builder
-
+# Stage 1: Dependencies
+FROM node:20-slim AS deps
 WORKDIR /app
-
-# Copy package files
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm ci
 
-# Copy source
+# Stage 2: Builder
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build for production
+# Set environment variables for build
+ENV NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+ENV NODE_ENV=production
+
 RUN npm run build
 
-# Production image
+# Stage 3: Runner
 FROM node:20-slim AS runner
-
 WORKDIR /app
 
-COPY --from=builder /app/next.config.ts ./
+ENV NODE_ENV=production
+ENV NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules

@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
 export async function GET() {
   try {
+    console.log(`Fetching from backend: ${BACKEND_URL}/api/v1/mobile/state`);
     const res = await fetch(`${BACKEND_URL}/api/v1/mobile/state`, {
       cache: "no-store",
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
