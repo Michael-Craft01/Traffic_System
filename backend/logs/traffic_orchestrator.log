@@ -6757,3 +6757,18 @@ ModuleNotFoundError: No module named 'cv2'
 2026-05-05 16:34:23,740 - redis_manager - WARNING - WARNING: Redis not found at localhost. Using in-memory fallback storage.
 2026-05-05 16:34:25,976 - ml_integration - INFO - ML Brain loaded successfully
 2026-05-05 16:34:26,169 - main - INFO - Initializing Traffic System Brain...
+2026-05-06 10:41:17,915 - redis_manager - WARNING - WARNING: Redis not found at localhost. Using in-memory fallback storage.
+2026-05-06 10:41:23,339 - ml_integration - INFO - ML Brain loaded successfully
+2026-05-06 10:41:23,590 - main - INFO - Starting the Traffic Director Backend...
+2026-05-06 10:41:51,857 - redis_manager - WARNING - WARNING: Redis not found at localhost. Using in-memory fallback storage.
+2026-05-06 10:41:55,724 - ml_integration - INFO - ML Brain loaded successfully
+2026-05-06 10:41:55,989 - main - INFO - Initializing Traffic System Brain...
+2026-05-06 10:45:11,776 - mobile_api - INFO - No live cameras — serving synthetic data: 182 vehicles (CLEAR)
+2026-05-06 10:46:37,679 - mobile_api - INFO - No live cameras — serving synthetic data: 166 vehicles (CLEAR)
+2026-05-06 10:46:37,712 - mobile_api - INFO - No live cameras — serving synthetic data: 182 vehicles (CLEAR)
+2026-05-06 10:49:12,512 - mobile_api - INFO - No live cameras — serving synthetic data: 171 vehicles (CLEAR)
+2026-05-06 10:49:18,344 - mobile_api - INFO - No live cameras — serving synthetic data: 185 vehicles (CLEAR)
+2026-05-06 10:49:19,994 - mobile_api - INFO - No live cameras — serving synthetic data: 166 vehicles (CLEAR)
+2026-05-06 10:49:25,355 - mobile_api - INFO - No live cameras — serving synthetic data: 162 vehicles (CLEAR)
+2026-05-06 10:49:30,346 - mobile_api - INFO - No live cameras — serving synthetic data: 180 vehicles (CLEAR)
+2026-05-06 10:49:30,661 - main - INFO - Shutting down Traffic System...

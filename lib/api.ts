@@ -76,13 +76,18 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
   };
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-    const res = await fetch(`${baseUrl}/api/v1${url}`, { 
+    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+    const finalUrl = `${baseUrl}/api/v1${url}`;
+    
+    const res = await fetch(finalUrl, { 
       ...options, 
       headers,
       signal: controller.signal 
     });
     return res;
+  } catch (error) {
+    console.error(`Fetch failed for ${url}:`, error);
+    throw error;
   } finally {
     clearTimeout(timer);
   }
