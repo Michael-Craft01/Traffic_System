@@ -24,7 +24,9 @@ import {
   Wind,
   Droplets,
   Settings,
-  Zap
+  Zap,
+  Layers,
+  LocateFixed
 } from "lucide-react";
 import Link from "next/link";
 import ForecastChart from "@/components/ForecastChart";
@@ -36,7 +38,8 @@ export default function DashboardPage() {
     congestion_level: "UNKNOWN",
     backend_online: false,
     cameras: {},
-    predictions: {}
+    predictions: {},
+    error: null
   });
 
   const [incidents, setIncidents] = useState<Incident[]>([]);

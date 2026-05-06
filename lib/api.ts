@@ -60,7 +60,7 @@ export interface PatternResponse {
   origin_name: string;
   dest_name: string;
   target_time: string;
-  confidence: float;
+  confidence: number;
 }
 
 // ── Fetch helpers ─────────────────────────────────────────────────

@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+*.log
+*.md
+.env.local
+backend/__pycache__
+backend/.pytest_cache
+backend/logs
+backend/test.db
+backend/traffic_brain.db
+traffic_model_best.pth
+yolov8n.pt
