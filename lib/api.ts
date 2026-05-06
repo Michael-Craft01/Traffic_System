@@ -18,8 +18,9 @@ export interface CameraData {
 }
 
 export interface TrafficState {
-  vehicle_count: number;
-  congestion_status: CongestionStatus;
+  total_vehicles: number;
+  average_speed: number;
+  congestion_level: CongestionStatus;
   cameras: Record<string, CameraData>;
   predictions?: Record<string, number[]>;
   backend_online: boolean;
@@ -97,9 +98,11 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
 
 export async function fetchTrafficState(): Promise<TrafficState> {
   const empty: TrafficState = {
-    vehicle_count: 0,
-    congestion_status: "UNKNOWN",
+    total_vehicles: 0,
+    average_speed: 0,
+    congestion_level: "UNKNOWN",
     cameras: {},
+    predictions: {},
     backend_online: false,
     error: null,
   };
@@ -109,11 +112,11 @@ export async function fetchTrafficState(): Promise<TrafficState> {
       return { ...empty, error: `Server returned ${res.status}` };
     }
     const json = await res.json();
-    const data = json.data || {};
     return {
-      vehicle_count:     json.live_nodes        ?? 0,
-      congestion_status: "UNKNOWN",
-      cameras:           data,
+      total_vehicles:    json.live_nodes        ?? 0,
+      average_speed:     45, // Demo fallback
+      congestion_level:  "UNKNOWN",
+      cameras:           json.data || {},
       predictions:       json.predictions       || {},
       backend_online:    true,
       error:             null,

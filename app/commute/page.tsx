@@ -104,7 +104,7 @@ export default function CommutePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const runAIForecast = async (camIds: string[], trafficRatio: number = 1.0, destName: string = "") => {
+  const runAIForecast = async (camIds: string[], trafficRatio: number = 1.0, originName: string = "", destName: string = "") => {
     try {
       const isTomorrow = selectedDay === "TOMORROW";
       const baseVol = 400 * trafficRatio * (isTomorrow ? 1.15 : 1.0);
@@ -122,22 +122,30 @@ export default function CommutePage() {
       let header = "";
       let detail = "";
       let suggestionText = "";
+      let benefitText = "";
+
+      const journeyText = originName && destName 
+        ? `For your journey from ${originName.split(',')[0]} to ${destName.split(',')[0]}`
+        : "For this route";
 
       if (destName.toLowerCase().includes("chinhoyi") || destName.toLowerCase().includes("mutare")) {
-        header = "Provincial Corridor Analysis: A1/A3 Regional Grid";
+        header = `Provincial Corridor Analysis: ${originName.split(',')[0]}→${destName.split(',')[0]}`;
         detail = "Regional Node telemetry detected a 18% density surge at the Msasa/Arcturus junction.";
-        suggestionText = `Suggestion: Execute Northern Bypass immediately. Signal priority has been requested at the Westgate hub for your arrival. Save: 45 mins.`;
+        suggestionText = `Suggestion: ${journeyText}, execute the Northern Bypass link immediately. Signal priority has been requested at the Westgate hub for your arrival.`;
+        benefitText = `Benefit: Save 45 mins. By bypassing the capital's core, you maintain high-speed provincial throughput and secure a +40 XP Regional Bonus.`;
       } else if (destName.toLowerCase().includes("cbd") || destName.toLowerCase().includes("harare") || destName.toLowerCase().includes("borrowdale")) {
-        header = "Urban Grid Orchestration: HRE-CENTER-01";
+        header = `Urban Grid Orchestration: ${originName.split(',')[0]} Context`;
         detail = "Arterial load is peaking. Node HRE-E04 reporting 82% saturation at baseline.";
-        suggestionText = `Suggestion: Divert via Enterprise Road link. I've reserved a 'Green Wave' slot for your arrival at the CBD perimeter. XP: +25.`;
+        suggestionText = `Suggestion: ${journeyText}, divert via the Enterprise Road link. I've reserved a 'Green Wave' slot for your arrival at the CBD perimeter.`;
+        benefitText = `Benefit: Save 12 mins. This route bypasses the Msasa bottleneck, ensuring a seamless entry into the city center while boosting your Commuter Rank (+25 XP).`;
       } else {
         header = "Neural Grid Optimized";
         detail = "Traffic density is within nominal range for this specific corridor.";
-        suggestionText = `Suggestion: Stick to the primary route. I have synchronized your journey with the current urban flow cycle.`;
+        suggestionText = `Suggestion: ${journeyText}, stick to the primary route. I have synchronized your journey with the current urban flow cycle.`;
+        benefitText = `Benefit: Save 5 mins. Direct routing remains the most efficient path for this sector, preserving fuel and vehicle longevity.`;
       }
 
-      const finalMsg = `Michael, ${header}. ${detail} ${suggestionText} Neural Confidence: 98.4%. High-Speed Slot: ${departureTime}.`;
+      const finalMsg = `Michael, ${header}. ${detail} ${suggestionText} ${benefitText} Neural Confidence: 98.4%. High-Speed Slot: ${departureTime}.`;
 
       setRecommendation({ 
         status: isTomorrow ? "WARNING" : (trafficRatio > 1.3 ? "CONGESTED" : "CLEAR"),
@@ -233,7 +241,7 @@ export default function CommutePage() {
       if (camList.length === 0) { camList.push("cam_main_01"); }
       setIntersectingCams(camList);
       
-      await runAIForecast(camList, trafficRatio, destination);
+      await runAIForecast(camList, trafficRatio, origin, destination);
 
     } catch (e: any) {
       toast.error(e.message || "Route search failed");

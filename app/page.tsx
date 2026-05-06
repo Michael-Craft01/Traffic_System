@@ -33,7 +33,7 @@ export default function DashboardPage() {
   const [liveState, setLiveState] = useState<TrafficState>({
     total_vehicles: 0,
     average_speed: 0,
-    congestion_level: "LOW",
+    congestion_level: "UNKNOWN",
     backend_online: false,
     cameras: {},
     predictions: {}
