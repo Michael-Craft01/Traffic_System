@@ -10,10 +10,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements from both locations
-COPY backend/requirements.txt ./backend/requirements.txt
+# Copy slim Docker requirements (excludes torch/GPU - not needed by API server)
+COPY backend/requirements.docker.txt ./backend/requirements.docker.txt
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r ./backend/requirements.txt
+    pip install --no-cache-dir -r ./backend/requirements.docker.txt
 
 # Copy backend code
 COPY backend/ /app/backend/
