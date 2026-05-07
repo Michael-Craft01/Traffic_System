@@ -241,7 +241,25 @@ export default function CommutePage() {
       if (camList.length === 0) { camList.push("cam_main_01"); }
       setIntersectingCams(camList);
       
+      
       await runAIForecast(camList, trafficRatio, origin, destination);
+
+      // --- SAVE TO HISTORY ---
+      if (!silentLog) {
+        addRecentRoute({
+          origin: {
+            name: origin,
+            lat: parseFloat(o.split(',')[0]) || -17.8292,
+            lng: parseFloat(o.split(',')[1]) || 31.0522
+          },
+          destination: {
+            name: destination,
+            lat: parseFloat(d.split(',')[0]) || -17.8292,
+            lng: parseFloat(d.split(',')[1]) || 31.0522
+          }
+        });
+        setRecentRoutes(getRecentRoutes());
+      }
 
     } catch (e: any) {
       toast.error(e.message || "Route search failed");

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
-import { Map, Marker, useMap } from "@vis.gl/react-google-maps";
+import { Map, AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
 import type { CameraData, CongestionStatus, Incident } from "@/lib/api";
 import { fetchIncidents } from "@/lib/api";
 import { AlertTriangle } from "lucide-react";
@@ -107,8 +107,8 @@ export default function TrafficMap({
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      console.warn("Geolocation not supported. Using demo fallback.");
-      setUserPos({ lat: -17.8350, lng: 31.0450 }); // Demo fallback near CBD
+      console.warn("Geolocation not supported. Using HIT fallback.");
+      setUserPos({ lat: -17.8517, lng: 31.0117 }); // Harare Institute of Technology
       return;
     }
     
@@ -119,8 +119,8 @@ export default function TrafficMap({
       },
       (err) => {
         console.warn("Geolocation blocked or failed:", err.message);
-        // Fallback to a point near the CBD so the demo still looks good
-        setUserPos({ lat: -17.8350, lng: 31.0450 });
+        // Fallback to Harare Institute of Technology for the demo
+        setUserPos({ lat: -17.8517, lng: 31.0117 });
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
@@ -140,6 +140,7 @@ export default function TrafficMap({
   return (
     <div className="relative w-full h-full bg-slate-200">
       <Map
+        mapId={"DEMO_MAP_ID"}
         defaultCenter={center}
         defaultZoom={12}
         disableDefaultUI={true}
@@ -155,8 +156,8 @@ export default function TrafficMap({
         {dynamicPath && dynamicPath.length > 0 && (
           <>
             <DynamicRouteComponent path={dynamicPath} color={pathColor} zIndex={2} />
-            <Marker position={dynamicPath[0]} label="S" />
-            <Marker position={dynamicPath[dynamicPath.length - 1]} label="E" />
+            <AdvancedMarker position={dynamicPath[0]} title="Start" />
+            <AdvancedMarker position={dynamicPath[dynamicPath.length - 1]} title="End" />
           </>
         )}
 
@@ -164,7 +165,7 @@ export default function TrafficMap({
         {CAMERA_NODES.map((cam) => {
           const camData = effectiveCameras[cam.id];
           return (
-            <Marker 
+            <AdvancedMarker 
               key={cam.id} 
               position={{ lat: cam.lat, lng: cam.lng }}
               title={`${cam.label}: ${camData.status}`}
@@ -175,7 +176,7 @@ export default function TrafficMap({
         {/* User Location */}
         {/* User Location — Professional Blue Dot */}
         {userPos && (
-          <Marker 
+          <AdvancedMarker 
             position={userPos} 
             title="You are here"
             zIndex={999}
@@ -184,7 +185,7 @@ export default function TrafficMap({
               <div className="absolute w-8 h-8 bg-blue-500/20 rounded-full animate-ping" />
               <div className="relative w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-lg" />
             </div>
-          </Marker>
+          </AdvancedMarker>
         )}
 
         {/* Legend Overlay */}
