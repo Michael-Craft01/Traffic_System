@@ -7573,3 +7573,7 @@ ModuleNotFoundError: No module named 'cv2'
 2026-05-07 20:36:31,626 - mobile_api - INFO - No live cameras — serving synthetic data: 69 vehicles (CLEAR)
 2026-05-07 20:36:41,627 - mobile_api - INFO - No live cameras — serving synthetic data: 75 vehicles (CLEAR)
 2026-05-07 20:36:51,623 - mobile_api - INFO - No live cameras — serving synthetic data: 76 vehicles (CLEAR)
+2026-05-07 20:37:01,636 - mobile_api - INFO - No live cameras — serving synthetic data: 86 vehicles (CLEAR)
+2026-05-07 20:37:11,637 - mobile_api - INFO - No live cameras — serving synthetic data: 68 vehicles (CLEAR)
+2026-05-07 20:44:41,556 - redis_manager - WARNING - WARNING: Redis not found at localhost. Using in-memory fallback storage.
+2026-05-07 20:44:46,099 - ml_integration - INFO - ML Brain loaded successfully

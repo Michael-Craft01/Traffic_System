@@ -3,12 +3,14 @@ import sys
 import datetime
 import math
 
-# Add the traffic_engine/ml folder to the Python path
+# Add the project root and ml folder to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir    = os.path.dirname(os.path.dirname(current_dir))
 ml_dir      = os.path.join(root_dir, "traffic_engine", "ml")
-if ml_dir not in sys.path:
-    sys.path.append(ml_dir)
+
+for path in [root_dir, ml_dir]:
+    if path not in sys.path:
+        sys.path.append(path)
 
 from core.database import SessionLocal, TrafficHistory
 from core.redis import redis_manager
@@ -19,7 +21,12 @@ logger = get_logger("ml_integration")
 
 # ── Load ML Brain ──────────────────────────────────────────────────
 try:
-    from inference import BrainInference
+    try:
+        # Try full package import (better for IDEs)
+        from traffic_engine.ml.inference import BrainInference
+    except ImportError:
+        # Fallback to direct import if sys.path is already hacked
+        from inference import BrainInference
 
     model_path    = os.path.join(ml_dir, "traffic_model_best.pth")
     metadata_path = os.path.join(ml_dir, "model_metadata.txt")
