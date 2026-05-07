@@ -44,6 +44,7 @@ export default function DashboardPage() {
 
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recenterMap, setRecenterMap] = useState<(() => void) | null>(null);
 
   const refreshData = useCallback(async () => {
     try {
@@ -93,10 +94,10 @@ export default function DashboardPage() {
             </div>
             <div>
                <h1 className="text-xl font-black text-black tracking-tighter leading-none">Traffic Intelligence</h1>
-               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] mt-1.5 flex items-center gap-1.5">
+               <div className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] mt-1.5 flex items-center gap-1.5">
                  <div className={`w-1.5 h-1.5 rounded-full ${backend_online ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                  Node: {backend_online ? 'HRE_CENTER_01' : 'OFFLINE'}
-               </p>
+               </div>
             </div>
          </div>
          <div className="flex items-center gap-6">
@@ -113,7 +114,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* ── Main Map View ── */}
         <main className="flex-1 relative border-r border-black/5 bg-zinc-100">
-           <MapProvider sensorData={liveState} />
+           <MapProvider sensorData={liveState} onLocate={(fn) => setRecenterMap(() => fn)} />
            
            {/* Floating Map HUD */}
            <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end pointer-events-none">
@@ -133,7 +134,11 @@ export default function DashboardPage() {
                  <button className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center text-zinc-400 hover:text-black transition-all border border-black/5">
                     <Layers size={20} />
                  </button>
-                 <button className="w-14 h-14 bg-black text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-zinc-900 transition-all">
+                 <button 
+                   onClick={() => recenterMap?.()}
+                   className={`w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center transition-all ${recenterMap ? 'bg-black text-white hover:bg-zinc-900' : 'bg-zinc-100 text-zinc-300 cursor-not-allowed'}`}
+                   title="Re-center on my location"
+                 >
                     <LocateFixed size={20} />
                  </button>
               </div>

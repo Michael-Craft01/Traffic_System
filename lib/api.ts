@@ -64,7 +64,7 @@ export interface PatternResponse {
 }
 
 // ── Fetch helpers ─────────────────────────────────────────────────
-const TIMEOUT_MS = 6000;
+const TIMEOUT_MS = 15000;
 
 async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();

@@ -39,6 +39,7 @@ interface TrafficMapProps {
   altPath?: google.maps.LatLngLiteral[];
   pathColor?: string;
   altPathColor?: string;
+  onLocate?: (fn: () => void) => void;
 }
 
 function TrafficLayerComponent() {
@@ -75,19 +76,53 @@ function DynamicRouteComponent({ path, color, zIndex }: { path: google.maps.LatL
   return null;
 }
 
-export default function TrafficMap({ sensorData, dynamicPath, altPath, pathColor = "#2563eb", altPathColor = "#94a3b8" }: TrafficMapProps) {
+export default function TrafficMap({ 
+  sensorData, 
+  dynamicPath, 
+  altPath, 
+  pathColor = "#2563eb", 
+  altPathColor = "#94a3b8",
+  onLocate
+}: TrafficMapProps) {
+  const map = useMap();
   const [userPos, setUserPos] = useState<google.maps.LatLngLiteral | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+
+  // Function to pan map to user
+  const recenter = useCallback(() => {
+    if (map && userPos) {
+      map.panTo(userPos);
+      map.setZoom(15);
+    }
+  }, [map, userPos]);
+
+  // Expose recenter function to parent
+  useEffect(() => {
+    if (onLocate) onLocate(recenter);
+  }, [onLocate, recenter]);
 
   useEffect(() => {
     fetchIncidents().then(setIncidents);
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      console.warn("Geolocation not supported. Using demo fallback.");
+      setUserPos({ lat: -17.8350, lng: 31.0450 }); // Demo fallback near CBD
+      return;
+    }
+    
     navigator.geolocation.getCurrentPosition(
-      (pos) => { setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
-      () => {}
+      (pos) => { 
+        console.log("GPS Location acquired:", pos.coords.latitude, pos.coords.longitude);
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }); 
+      },
+      (err) => {
+        console.warn("Geolocation blocked or failed:", err.message);
+        // Fallback to a point near the CBD so the demo still looks good
+        setUserPos({ lat: -17.8350, lng: 31.0450 });
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   }, []);
 
@@ -138,7 +173,19 @@ export default function TrafficMap({ sensorData, dynamicPath, altPath, pathColor
         })}
 
         {/* User Location */}
-        {userPos && <Marker position={userPos} title="You are here" />}
+        {/* User Location — Professional Blue Dot */}
+        {userPos && (
+          <Marker 
+            position={userPos} 
+            title="You are here"
+            zIndex={999}
+          >
+            <div className="relative flex items-center justify-center">
+              <div className="absolute w-8 h-8 bg-blue-500/20 rounded-full animate-ping" />
+              <div className="relative w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-lg" />
+            </div>
+          </Marker>
+        )}
 
         {/* Legend Overlay */}
         <div className="absolute bottom-6 left-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-100 px-4 py-3">
