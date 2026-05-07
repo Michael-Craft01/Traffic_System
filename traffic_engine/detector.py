@@ -1,9 +1,11 @@
 import os
 import requests
 import time
+import threading
+import cv2
 from ultralytics import YOLO
 
-# 1. Configuration (Prioritize environment variables set by the launcher)
+# 1. Configuration
 PHONE_IP = os.environ.get("TRAFFIC_PHONE_IP", "192.168.1.128").strip()
 PORT = os.environ.get("TRAFFIC_PHONE_PORT", "8080").strip()
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000/api/v1/ingest/camera").strip()
@@ -14,9 +16,29 @@ if PHONE_IP != "0":
 else:
     VIDEO_SOURCE = 0
 
-print(f"🚀 Launching Native YOLOv8 Detector on: {VIDEO_SOURCE}")
+# 2. Threaded Frame Reader (The ROOT CAUSE fix for lag)
+class RealTimeStream:
+    def __init__(self, url):
+        self.cap = cv2.VideoCapture(url)
+        self.grabbed, self.frame = self.cap.read()
+        self.running = True
+        # Start background thread to keep the buffer empty
+        threading.Thread(target=self.update, daemon=True).start()
 
-# 2. Load the standard YOLOv8 model
+    def update(self):
+        while self.running:
+            self.grabbed, self.frame = self.cap.read()
+            if not self.grabbed:
+                self.running = False
+
+    def read(self):
+        return self.frame
+
+    def stop(self):
+        self.running = False
+        self.cap.release()
+
+# 3. AI Setup
 model = YOLO('yolov8n.pt')
 
 def determine_status(count):
@@ -25,53 +47,37 @@ def determine_status(count):
     return "CONGESTED"
 
 def send_to_backend(count, status):
-    payload = {
-        "camera_id": CAMERA_ID,
-        "total_flow": count,
-        "status": status,
-        "latitude": -17.8292, # Example coords
-        "longitude": 31.0522
-    }
+    payload = {"camera_id": CAMERA_ID, "total_flow": count, "status": status, "latitude": -17.8292, "longitude": 31.0522}
     try:
-        requests.post(BACKEND_URL, json=payload, headers={"Authorization": "Bearer demo-token"}, timeout=1)
+        requests.post(BACKEND_URL, json=payload, headers={"Authorization": "Bearer demo-token"}, timeout=0.1)
     except:
         pass
 
-import cv2
+# 4. Main Real-Time Loop
+stream = RealTimeStream(VIDEO_SOURCE)
+print(f"🚀 Real-Time Vision Online: {VIDEO_SOURCE}")
 
-# 3. Main Tracking Loop
-# We use 'stream=True' for efficiency and manually render the window to add our custom HUD.
-results_generator = model.track(
-    source=VIDEO_SOURCE, 
-    persist=True, 
-    imgsz=320, 
-    stream=True,
-    classes=[2, 3, 5, 7]
-)
+while stream.running:
+    frame = stream.read()
+    if frame is None: continue
 
-print("🚀 Vision Engine Online. Press 'q' in the window to stop.")
+    # Run YOLOv8 on the LATEST frame only
+    results = model.track(frame, persist=True, verbose=False, imgsz=320, classes=[2, 3, 5, 7])
+    
+    if results[0].boxes is not None:
+        # Draw native YOLO boxes
+        annotated_frame = results[0].plot()
+        count = len(results[0].boxes)
+        status = determine_status(count)
+        
+        # HUD Overlays
+        cv2.putText(annotated_frame, f"CARS: {count} | STATUS: {status}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        
+        cv2.imshow("Traffic AI Vision Node", annotated_frame)
+        threading.Thread(target=send_to_backend, args=(count, status), daemon=True).start()
 
-for result in results_generator:
-    # 1. Get the frame with native YOLO boxes already drawn
-    frame = result.plot()
-    
-    # 2. Calculate Traffic Data
-    count = len(result.boxes) if result.boxes.id is not None else 0
-    status = determine_status(count)
-    
-    # 3. Overlay our custom "Traffic Details" HUD
-    # We use a high-contrast style for professional look
-    cv2.putText(frame, f"VEHICLES: {count}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-    cv2.putText(frame, f"STATUS: {status}", (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-    
-    # 4. Show the combined frame
-    cv2.imshow("Traffic AI Vision Node", frame)
-    
-    # Send data to backend
-    send_to_backend(count, status)
-    
-    # Check for 'q' key to exit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+stream.stop()
 cv2.destroyAllWindows()
