@@ -29,12 +29,12 @@ start "YOLO Vision Node" cmd /k "set TRAFFIC_PHONE_IP=%TRAFFIC_PHONE_IP% && py t
 
 :: 3. Start the Next.js Dashboard
 echo  [3/4] Starting Web Interface...
-start "Traffic Dashboard" /min cmd /k "npm run dev"
+start "Traffic Dashboard" /min cmd /k "npm run dev -- -p 3001"
 
 :: 4. Launch the Browser Automatically
 echo  [4/4] Launching Dashboard in Browser...
 timeout /t 5 /nobreak >nul
-start http://localhost:3000
+start http://localhost:3001
 
 echo.
 echo  ============================================================
