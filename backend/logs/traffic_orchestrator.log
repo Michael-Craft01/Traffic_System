@@ -7572,3 +7572,4 @@ ModuleNotFoundError: No module named 'cv2'
 2026-05-07 20:36:21,631 - mobile_api - INFO - No live cameras — serving synthetic data: 81 vehicles (CLEAR)
 2026-05-07 20:36:31,626 - mobile_api - INFO - No live cameras — serving synthetic data: 69 vehicles (CLEAR)
 2026-05-07 20:36:41,627 - mobile_api - INFO - No live cameras — serving synthetic data: 75 vehicles (CLEAR)
+2026-05-07 20:36:51,623 - mobile_api - INFO - No live cameras — serving synthetic data: 76 vehicles (CLEAR)
