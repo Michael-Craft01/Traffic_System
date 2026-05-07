@@ -3,10 +3,10 @@ import requests
 import time
 from ultralytics import YOLO
 
-# 1. Hardcoded Configuration
-PHONE_IP = "192.168.1.128"
-PORT = "8080"
-BACKEND_URL = "http://127.0.0.1:8000/api/v1/ingest/camera"
+# 1. Configuration (Prioritize environment variables set by the launcher)
+PHONE_IP = os.environ.get("TRAFFIC_PHONE_IP", "192.168.1.128")
+PORT = os.environ.get("TRAFFIC_PHONE_PORT", "8080")
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000/api/v1/ingest/camera")
 CAMERA_ID = "cam_main_01"
 
 if PHONE_IP != "0":

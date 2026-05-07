@@ -1,7 +1,6 @@
 @echo off
 :: ============================================================
-::  TRAFFIC COMMAND CENTER — Demo Launcher
-::  Reads .env automatically — just update .env before demos.
+::  TRAFFIC COMMAND CENTER — Master "One-Click" Launcher
 :: ============================================================
 echo.
 echo  ██████████████████████████████████████████████
@@ -9,34 +8,39 @@ echo  ██  TRAFFIC AI COMMAND CENTER  v1.0          ██
 echo  ██████████████████████████████████████████████
 echo.
 
-:: --- Step 1: Load variables from .env ---
-echo [1/3] Loading environment config from .env...
-for /f "usebackq tokens=1,* delims==" %%A in (`findstr /v "^#" .env`) do (
-    set "%%A=%%B"
-)
+:: --- IP CONFIGURATION PROMPT ---
+set /p USER_IP="[SETUP] Enter Camera IP (Press Enter for default 192.168.1.128): "
+if "%USER_IP%"=="" set USER_IP=192.168.1.128
+set TRAFFIC_PHONE_IP=%USER_IP%
 
-:: --- Step 2: Show what camera source will be used ---
 echo.
-if "%TRAFFIC_PHONE_IP%"=="0" (
-    echo  [CAM] Source: LOCAL WEBCAM (device 0)
-) else (
-    echo  [CAM] Source: PHONE IP CAMERA  ^>  http://%TRAFFIC_PHONE_IP%:%TRAFFIC_PHONE_PORT%/video
-)
-echo  [API] Backend: %BACKEND_URL%
+echo  [SYSTEM] Initializing AI Traffic Orchestration on %TRAFFIC_PHONE_IP%...
 echo.
 
-:: --- Step 3: Launch Frontend Dashboard in a new window ---
-echo [2/3] Starting Next.js Dashboard...
-start "Traffic Dashboard" cmd /k "npm run dev"
-echo  Dashboard will be ready at: http://localhost:3000
-
-:: --- Step 4: Brief pause so the dashboard window opens ---
-timeout /t 2 /nobreak >nul
-
-:: --- Step 5: Start Backend ---
-echo [3/3] Starting Traffic Director Backend...
+:: 1. Start the Backend API (Hidden window)
+echo  [1/4] Starting Traffic Backend...
 cd backend
-start "Traffic Backend" cmd /k "py main.py"
+start "Traffic Backend" /min cmd /k "py main.py"
 cd ..
 
+:: 2. Start the AI Vision Node (Visible Window)
+echo  [2/4] Starting YOLOv8 Vision Engine...
+start "YOLO Vision Node" cmd /k "set TRAFFIC_PHONE_IP=%TRAFFIC_PHONE_IP% && py traffic_engine/detector.py"
+
+:: 3. Start the Next.js Dashboard
+echo  [3/4] Starting Web Interface...
+start "Traffic Dashboard" /min cmd /k "npm run dev"
+
+:: 4. Launch the Browser Automatically
+echo  [4/4] Launching Dashboard in Browser...
+timeout /t 5 /nobreak >nul
+start http://localhost:3000
+
+echo.
+echo  ============================================================
+echo   [READY] System is now running! 
+echo   - Close the YOLO window to stop detection.
+echo   - Close this terminal to stop the entire system.
+echo  ============================================================
+echo.
 pause
