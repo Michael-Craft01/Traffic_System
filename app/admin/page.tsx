@@ -36,6 +36,8 @@ export default function AdminPage() {
     "System: CV Pipeline Initialized.",
     "System: Waiting for Camera connection..."
   ]);
+  const [cameraIp, setCameraIp] = useState(process.env.NEXT_PUBLIC_TRAFFIC_PHONE_IP || "192.168.1.128");
+  const [isConnecting, setIsConnecting] = useState(false);
   const [stats, setStats] = useState({
     fps: 30,
     latency: 12,
@@ -49,15 +51,28 @@ export default function AdminPage() {
 
   const toggleLive = async () => {
     if (isLive) {
+      setIsConnecting(true);
       await disconnectCamera();
       setIsLive(false);
+      setIsConnecting(false);
       addLog("Camera: Disconnected manually.");
     } else {
-      addLog("Camera: Requesting connection to 10.220.160.83...");
-      const res = await connectCamera("10.220.160.83", "8080", "cam_main_01");
-      if (res.status === "success" || res.status === "error") { // error if already running or simulated
-        setIsLive(true);
-        addLog("Camera: Handshake successful. Receiving stream.");
+      setIsConnecting(true);
+      addLog(`Camera: Requesting connection to ${cameraIp}...`);
+      try {
+        const res = await connectCamera(cameraIp, "8080", "cam_main_01");
+        // res.status might be missing if backend returns 500 detail
+        if (res.status === "success") {
+          setIsLive(true);
+          addLog(`Camera: Handshake successful. Receiving stream from ${cameraIp}.`);
+        } else {
+          addLog(`Camera Error: ${res.detail || res.message || "Failed to initialize node"}`);
+          setIsLive(false);
+        }
+      } catch (e) {
+        addLog("Camera: Connection failed. Is the backend running?");
+      } finally {
+        setIsConnecting(false);
       }
     }
   };
@@ -143,7 +158,11 @@ export default function AdminPage() {
              <div className="relative aspect-video bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden group shadow-2xl shadow-black">
                 {isLive ? (
                   <div className="relative w-full h-full">
-                     <img src="/traffic_vision.png" className="w-full h-full object-cover opacity-80" alt="Vision Feed" />
+                     <img 
+                       src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'}/api/v1/camera/stream`} 
+                       className="w-full h-full object-cover" 
+                       alt="Live Vision Feed" 
+                     />
                      
                      {/* SVG Detection Overlays */}
                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -205,10 +224,30 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-800 to-zinc-950">
-                    <Video size={48} className="text-zinc-800" />
-                    <div className="text-center">
+                    <Video size={48} className="text-zinc-800 mb-2" />
+                    <div className="text-center z-10">
                        <p className="text-sm font-bold text-zinc-500 uppercase tracking-[0.3em]">No Active Stream</p>
-                       <p className="text-[10px] text-zinc-700 mt-2 italic">Connect a camera node to begin inference</p>
+                       <p className="text-[10px] text-zinc-700 mt-2 mb-6 italic">Connect a camera node to begin inference</p>
+                       
+                       <div className="flex flex-col items-center gap-3 bg-black/40 p-6 rounded-lg border border-white/5 backdrop-blur-md">
+                          <div className="flex flex-col gap-1.5 items-start w-64">
+                            <label className="text-[9px] font-black text-cyan-500/70 uppercase tracking-widest ml-1">Node IP Address</label>
+                            <input 
+                              type="text" 
+                              value={cameraIp} 
+                              onChange={(e) => setCameraIp(e.target.value)}
+                              className="w-full bg-zinc-900/80 border border-zinc-700 rounded px-4 py-2.5 text-sm font-mono text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+                              placeholder="e.g. 192.168.1.128"
+                            />
+                          </div>
+                          <button 
+                            onClick={toggleLive}
+                            disabled={isConnecting}
+                            className="w-full max-w-[256px] py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs uppercase tracking-[0.2em] rounded shadow-lg shadow-cyan-500/20 transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            {isConnecting ? "Negotiating..." : "Initialize Node"}
+                          </button>
+                       </div>
                     </div>
                   </div>
                 )}
@@ -227,13 +266,25 @@ export default function AdminPage() {
                       <Zap size={16} className="text-cyan-400" />
                       <h3 className="text-xs font-black uppercase tracking-widest">Controls</h3>
                    </div>
+                   <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Target IP Address</label>
+                      <input 
+                        type="text" 
+                        value={cameraIp} 
+                        onChange={(e) => setCameraIp(e.target.value)}
+                        disabled={isLive || isConnecting}
+                        className="bg-black/40 border border-zinc-700 rounded px-3 py-2 text-xs font-mono focus:border-cyan-500 outline-none transition-all disabled:opacity-50"
+                        placeholder="e.g. 192.168.1.128"
+                      />
+                   </div>
                    <button 
                      onClick={toggleLive}
+                     disabled={isConnecting}
                      className={`w-full py-3 rounded font-bold text-xs uppercase tracking-widest transition-all ${
                        isLive ? 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white' : 'bg-cyan-500 text-black hover:bg-cyan-400'
-                     }`}
+                     } disabled:opacity-50 disabled:cursor-wait`}
                    >
-                     {isLive ? "Disconnect Node" : "Initialize Node"}
+                     {isConnecting ? "Negotiating..." : isLive ? "Disconnect Node" : "Initialize Node"}
                    </button>
                    <button className="w-full py-3 rounded border border-zinc-700 text-zinc-400 font-bold text-xs uppercase tracking-widest hover:bg-zinc-800 transition-all">
                      Calibrate Zones

@@ -23,7 +23,7 @@ if "%1"=="" (
 set NEW_IP=%1
 
 :: Use PowerShell to do a clean in-place replace in .env
-powershell -Command "(Get-Content .env) -replace '^TRAFFIC_PHONE_IP=.*', 'TRAFFIC_PHONE_IP=%NEW_IP%' | Set-Content .env"
+powershell -Command "(Get-Content .env) -replace '^TRAFFIC_PHONE_IP=.*', 'TRAFFIC_PHONE_IP=%NEW_IP%' -replace '^NEXT_PUBLIC_TRAFFIC_PHONE_IP=.*', 'NEXT_PUBLIC_TRAFFIC_PHONE_IP=%NEW_IP%' | Set-Content .env"
 
 echo  [OK] Camera IP updated to: %NEW_IP%
 echo.

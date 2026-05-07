@@ -33,14 +33,10 @@ echo  Dashboard will be ready at: http://localhost:3000
 :: --- Step 4: Brief pause so the dashboard window opens ---
 timeout /t 2 /nobreak >nul
 
-:: --- Step 5: Launch the AI Detector (env vars are inherited, no flags needed) ---
-echo.
-echo [3/3] Starting AI Detector Engine...
-echo  (Press 'q' in the video window to stop)
-echo.
+:: --- Step 5: Start Backend ---
+echo [3/3] Starting Traffic Director Backend...
 cd backend
 start "Traffic Backend" cmd /k "py main.py"
 cd ..
-py traffic_engine/detector.py
 
 pause
