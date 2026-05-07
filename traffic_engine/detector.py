@@ -9,17 +9,26 @@ import threading
 import argparse
 
 # --- ARGUMENT PARSING ---
+# Priority: CLI arg > Environment Variable > Hardcoded default
+# This means you only need to update .env — no CLI flags needed during demos.
+_env_ip   = os.environ.get("TRAFFIC_PHONE_IP", "0")
+_env_port = os.environ.get("TRAFFIC_PHONE_PORT", "8080")
+_env_url  = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000") + "/api/v1/ingest/camera"
+_env_headless = os.environ.get("HEADLESS", "false").lower() == "true"
+
 parser = argparse.ArgumentParser(description="Traffic AI Detector Node")
-parser.add_argument("--ip", type=str, default="0", help="IP address of the phone camera (use '0' for webcam)")
-parser.add_argument("--port", type=str, default="8080", help="Port of the IP camera app")
+parser.add_argument("--ip",        type=str, default=_env_ip,   help="IP of the phone camera ('0' = local webcam). Overrides TRAFFIC_PHONE_IP env var.")
+parser.add_argument("--port",      type=str, default=_env_port, help="Port of the IP Webcam app. Overrides TRAFFIC_PHONE_PORT env var.")
 parser.add_argument("--camera_id", type=str, default="cam_main_01", help="ID of this node")
-parser.add_argument("--url", type=str, default="http://127.0.0.1:8000/api/v1/ingest/camera", help="Backend ingestion URL")
+parser.add_argument("--url",       type=str, default=_env_url,  help="Backend ingestion URL. Overrides BACKEND_URL env var.")
+parser.add_argument("--headless",  action="store_true", default=_env_headless, help="Run without GUI window (for Docker)")
 args = parser.parse_args()
 
 PHONE_IP = args.ip
 PORT = args.port
 BACKEND_URL = args.url
 CAMERA_ID = args.camera_id
+HEADLESS = args.headless
 
 # --- SYSTEM SETTINGS ---
 DATA_FILE = os.path.join(os.path.dirname(__file__), '../public/traffic_data.json')
@@ -182,11 +191,13 @@ def start_detection():
         cv2.putText(frame, f"Total Passed: {total_vehicles_passed}", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
         cv2.putText(frame, f"Status: {status}", (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
         
-        cv2.imshow("Traffic AI Vision Node", frame)
+        if not HEADLESS:
+            cv2.imshow("Traffic AI Vision Node", frame)
         
         # REQUIRED for the window to actually show and refresh
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        if not HEADLESS:
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
         
         # Save frame for web dashboard (High-speed "live" feed)
         try:
@@ -205,11 +216,13 @@ def start_detection():
             
             last_update_time = current_time
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        if not HEADLESS:
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
     cap.release()
-    cv2.destroyAllWindows()
+    if not HEADLESS:
+        cv2.destroyAllWindows()
     return True
 
 if __name__ == "__main__":

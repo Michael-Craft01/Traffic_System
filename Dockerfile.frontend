@@ -10,8 +10,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set environment variables for build
-ENV NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+# Accept the backend URL as a build argument (passed from docker-compose / .env)
+ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
 ENV NODE_ENV=production
 
 RUN npm run build
